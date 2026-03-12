@@ -25,6 +25,8 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@playwright/mcp": "^0.0.68",
     "@playwright/test": "^1.58.2",
     "clipboardy": "^5.3.1",
     "dotenv": "^17.3.1",

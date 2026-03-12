@@ -42,6 +42,11 @@ relayWs.on('connection', (ws) => {
   });
 });
 
+import { mcpManager } from './core/mcp.js';
+
+console.log('[Server] Initializing MCP (Playwright)...');
+await mcpManager.initialize();
+
 console.log('[Server] Initializing Brain...');
 const brain = new Brain();
 

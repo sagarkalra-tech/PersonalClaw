@@ -13,7 +13,11 @@ import {
   Moon,
   Camera,
   Loader2,
-  X
+  X,
+  Clock,
+  HardDrive,
+  Cpu,
+  Database
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
@@ -27,6 +31,8 @@ interface Message {
   image?: string;
 }
 
+type TabType = 'command' | 'metrics' | 'files' | 'security';
+
 const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([
     { id: '1', text: 'Welcome back, System Admin. PersonalClaw is active and monitoring.', sender: 'bot', timestamp: new Date() }
@@ -38,6 +44,7 @@ const App: React.FC = () => {
   const [isCapturing, setIsCapturing] = useState(false);
   const [isBotTyping, setIsBotTyping] = useState(false);
   const [pendingScreenshot, setPendingScreenshot] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<TabType>('command');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -64,8 +71,10 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isBotTyping]);
+    if (activeTab === 'command') {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, isBotTyping, activeTab]);
 
   useEffect(() => {
     if (isLightTheme) {
@@ -89,7 +98,6 @@ const App: React.FC = () => {
     setMessages(prev => [...prev, newMessage]);
     setIsBotTyping(true);
     
-    // Send both text and optional image in one message
     socket.emit('message', { 
       text: inputValue || 'Analyze this image.', 
       image: pendingScreenshot 
@@ -144,19 +152,19 @@ const App: React.FC = () => {
         <h1>PersonalClaw</h1>
         <nav style={{ flex: 1 }}>
           <ul style={{ listStyle: 'none' }}>
-            <li className="nav-item active">
+            <li className={`nav-item ${activeTab === 'command' ? 'active' : ''}`} onClick={() => setActiveTab('command')}>
               <LayoutDashboard size={20} />
               <span>Command Center</span>
             </li>
-            <li className="nav-item">
+            <li className={`nav-item ${activeTab === 'metrics' ? 'active' : ''}`} onClick={() => setActiveTab('metrics')}>
               <Activity size={20} />
               <span>System Metrics</span>
             </li>
-            <li className="nav-item">
+            <li className={`nav-item ${activeTab === 'files' ? 'active' : ''}`} onClick={() => setActiveTab('files')}>
               <FileCode size={20} />
               <span>File Explorer</span>
             </li>
-            <li className="nav-item">
+            <li className={`nav-item ${activeTab === 'security' ? 'active' : ''}`} onClick={() => setActiveTab('security')}>
               <Shield size={20} />
               <span>Security Logs</span>
             </li>
@@ -200,106 +208,213 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        <div className="chat-panel">
-          <div className="terminal-header">
-            <div className="dot red" />
-            <div className="dot yellow" />
-            <div className="dot green" />
-            <span style={{ marginLeft: '12px', fontSize: '0.8rem', opacity: 0.6, fontFamily: 'monospace' }}>personal-claw-v1.10.0 --active</span>
-          </div>
-
-          <div className="messages-container">
-            <AnimatePresence initial={false}>
-              {messages.map((msg) => (
-                <motion.div
-                  key={msg.id}
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  className={`message ${msg.sender}`}
-                >
-                  <div style={{ display: 'flex', gap: '12px' }}>
-                    <div style={{ marginTop: '4px' }}>
-                      {msg.sender === 'bot' ? <Bot size={18} /> : <User size={18} />}
-                    </div>
-                    <div className="message-text">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {msg.text}
-                      </ReactMarkdown>
-                      {msg.image && (
-                        <img 
-                          src={msg.image} 
-                          alt="Uploaded content" 
-                          style={{ maxWidth: '100%', borderRadius: '8px', marginTop: '10px', border: '1px solid var(--border)' }} 
-                        />
-                      )}
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
-              {isBotTyping && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="message bot"
-                  style={{ background: 'transparent', border: 'none', padding: '0 20px' }}
-                >
-                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                    <Bot size={18} />
-                    <div className="typing-indicator">
-                      <div className="typing-dot" />
-                      <div className="typing-dot" />
-                      <div className="typing-dot" />
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-            <div ref={messagesEndRef} />
-          </div>
-
-          <div className="input-area-outer">
-            {pendingScreenshot && (
-              <motion.div 
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="pending-preview"
+        <div className="content-area" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <AnimatePresence mode="wait">
+            {activeTab === 'command' && (
+              <motion.div
+                key="chat"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="chat-panel"
+                style={{ flex: 1, display: 'flex', flexDirection: 'column' }}
               >
-                <img src={pendingScreenshot} alt="Pending" />
-                <button className="remove-preview" onClick={() => setPendingScreenshot(null)}>
-                  <X size={14} />
-                </button>
-                <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginLeft: '10px' }}>Screenshot attached. Type your request and send.</span>
+                <div className="terminal-header">
+                  <div className="dot red" />
+                  <div className="dot yellow" />
+                  <div className="dot green" />
+                  <span style={{ marginLeft: '12px', fontSize: '0.8rem', opacity: 0.6, fontFamily: 'monospace' }}>personal-claw-v1.10.0 --active</span>
+                </div>
+
+                <div className="messages-container">
+                  <AnimatePresence initial={false}>
+                    {messages.map((msg) => (
+                      <motion.div
+                        key={msg.id}
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        className={`message ${msg.sender}`}
+                      >
+                        <div style={{ display: 'flex', gap: '12px' }}>
+                          <div style={{ marginTop: '4px' }}>
+                            {msg.sender === 'bot' ? <Bot size={18} /> : <User size={18} />}
+                          </div>
+                          <div className="message-text">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                              {msg.text}
+                            </ReactMarkdown>
+                            {msg.image && (
+                              <img 
+                                src={msg.image} 
+                                alt="Uploaded content" 
+                                style={{ maxWidth: '100%', borderRadius: '8px', marginTop: '10px', border: '1px solid var(--border)' }} 
+                              />
+                            )}
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                    {isBotTyping && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="message bot"
+                        style={{ background: 'transparent', border: 'none', padding: '0 20px' }}
+                      >
+                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                          <Bot size={18} />
+                          <div className="typing-indicator">
+                            <div className="typing-dot" />
+                            <div className="typing-dot" />
+                            <div className="typing-dot" />
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                  <div ref={messagesEndRef} />
+                </div>
+
+                <div className="input-area-outer">
+                  {pendingScreenshot && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="pending-preview"
+                    >
+                      <img src={pendingScreenshot} alt="Pending" />
+                      <button className="remove-preview" onClick={() => setPendingScreenshot(null)}>
+                        <X size={14} />
+                      </button>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginLeft: '10px' }}>Screenshot attached. Type your request and send.</span>
+                    </motion.div>
+                  )}
+                  <div className="input-area" style={{ alignItems: 'flex-end' }}>
+                    <textarea
+                      placeholder="Ask PersonalClaw to do something..."
+                      value={inputValue}
+                      onChange={(e) => setInputValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendMessage();
+                        }
+                      }}
+                    />
+                    <button 
+                      className="screenshot-btn" 
+                      onClick={handleScreenshot} 
+                      disabled={isCapturing}
+                      title="Capture Screenshot"
+                    >
+                      {isCapturing ? <Loader2 size={20} className="spin" /> : <Camera size={20} />}
+                    </button>
+                    <button className="send-btn" onClick={handleSendMessage} style={{ height: '48px' }}>
+                      <Send size={20} />
+                    </button>
+                  </div>
+                </div>
               </motion.div>
             )}
-            <div className="input-area" style={{ alignItems: 'flex-end' }}>
-              <textarea
-                placeholder="Ask PersonalClaw to do something..."
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage();
-                  }
-                }}
-              />
-              <button 
-                className="screenshot-btn" 
-                onClick={handleScreenshot} 
-                disabled={isCapturing}
-                title="Capture Screenshot"
+
+            {activeTab === 'metrics' && (
+              <motion.div
+                key="metrics"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="metrics-view panel-glass"
+                style={{ flex: 1, padding: '30px', overflowY: 'auto' }}
               >
-                {isCapturing ? <Loader2 size={20} className="spin" /> : <Camera size={20} />}
-              </button>
-              <button className="send-btn" onClick={handleSendMessage} style={{ height: '48px' }}>
-                <Send size={20} />
-              </button>
-            </div>
-          </div>
+                <h2>System Telemetry</h2>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '20px', marginTop: '30px' }}>
+                  <div className="stat-card" style={{ background: 'rgba(255,255,255,0.03)' }}>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '15px' }}>
+                      <Cpu size={20} color="var(--accent-primary)" />
+                      <span style={{ fontWeight: 600 }}>Processor Load</span>
+                    </div>
+                    <div style={{ fontSize: '2rem', fontWeight: 800 }}>{metrics.cpu}%</div>
+                  </div>
+                  <div className="stat-card" style={{ background: 'rgba(255,255,255,0.03)' }}>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '15px' }}>
+                      <Database size={20} color="var(--accent-secondary)" />
+                      <span style={{ fontWeight: 600 }}>Memory Usage</span>
+                    </div>
+                    <div style={{ fontSize: '2rem', fontWeight: 800 }}>{metrics.ram} GB</div>
+                    <div style={{ color: 'var(--text-dim)', fontSize: '0.8rem' }}>of {metrics.totalRam} GB available</div>
+                  </div>
+                </div>
+                {/* Visual Placeholder for Graph */}
+                <div style={{ marginTop: '30px', height: '200px', background: 'rgba(255,255,255,0.02)', borderRadius: '20px', border: '1px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)' }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <Activity size={40} style={{ marginBottom: '10px', opacity: 0.3 }} />
+                    <p>Real-time performance graph incoming...</p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {activeTab === 'files' && (
+              <motion.div
+                key="files"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="files-view panel-glass"
+                style={{ flex: 1, padding: '30px', overflowY: 'auto' }}
+              >
+                <h2>File Explorer</h2>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px', marginTop: '30px' }}>
+                   {['Screenshots', 'Memory', 'Downloads', 'Documents', 'Skills', 'Logs'].map(folder => (
+                     <div key={folder} className="stat-card" style={{ background: 'rgba(255,255,255,0.03)', cursor: 'pointer', transition: 'var(--transition)' }}>
+                        <HardDrive size={24} style={{ marginBottom: '10px', color: 'var(--accent-primary)' }} />
+                        <div style={{ fontWeight: 600 }}>{folder}</div>
+                     </div>
+                   ))}
+                </div>
+              </motion.div>
+            )}
+
+            {activeTab === 'security' && (
+              <motion.div
+                key="security"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="security-view panel-glass"
+                style={{ flex: 1, padding: '30px', overflowY: 'auto' }}
+              >
+                <h2>Security & Activity Logs</h2>
+                <div style={{ marginTop: '30px' }}>
+                  <div className="log-entry" style={{ padding: '15px', borderBottom: '1px solid var(--border)', display: 'flex', gap: '15px' }}>
+                    <Clock size={16} color="var(--accent-primary)" />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>System Initialized</div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>{new Date().toLocaleString()} - Agent online and scanning environment.</div>
+                    </div>
+                  </div>
+                  <div className="log-entry" style={{ padding: '15px', borderBottom: '1px solid var(--border)', display: 'flex', gap: '15px' }}>
+                    <Clock size={16} color="var(--accent-secondary)" />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Dashboard Connected</div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>Session handshake completed via Socket.io.</div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </main>
 
       <style>{`
+        .panel-glass {
+          background: var(--panel-bg);
+          backdrop-filter: blur(12px);
+          border: 1px solid var(--border);
+          border-radius: 24px;
+          box-shadow: var(--glass-shadow);
+        }
         .nav-item {
           display: flex;
           align-items: center;

@@ -9,18 +9,19 @@ dotenv.config();
 const MEMORY_DIR = path.join(process.cwd(), 'memory');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-const model = genAI.getGenerativeModel({
-  model: 'gemini-3-flash-preview',
-  tools: getToolDefinitions() as any,
-});
 
 export class Brain {
   private chat: any;
   private history: any[] = [];
   private sessionId: string;
   private systemPrompt: any;
+  private model: any;
 
   constructor() {
+    this.model = genAI.getGenerativeModel({
+      model: 'gemini-3-flash-preview',
+      tools: getToolDefinitions() as any,
+    });
     this.sessionId = `session_${Date.now()}`;
     this.systemPrompt = {
       role: 'user',
@@ -28,13 +29,13 @@ export class Brain {
 Capabilities:
 - shell: Direct PowerShell control.
 - files: CRUD operations.
-- web: Headless browser control.
+- web: Advanced browser automation via Playwright MCP. You have granular tools like 'playwright_navigate', 'playwright_click', 'playwright_fill', 'playwright_screenshot', etc.
 - vision: Screen analysis using analyze_vision.
 - python: Script execution.
 - relay_browser_command: Control ACTIVE browser tabs. Use 'list' to see tabs, 'execute' for JS, or 'human_action' (with a JSON string code like {"action":"click", "selector":"#id"}) for realistic interactions like clicking and typing.
 - manage_scheduler: Schedule recurring tasks (cron jobs). Use actions "add", "list", or "remove".
 
-Guidelines: Use vision proactively when user asks about the screen. For scheduling, use standard cron syntax (e.g., "0 * * * *" for hourly). If you are unsure which tab is active or you are getting localhost/dashboard info, use relay_browser_command with action 'list' to find the correct tabId first.` }],
+Guidelines: Use vision proactively. For web, prefer 'playwright_get_accessibility_tree' to understand page structure before clicking. When user asks to "launch" a browser, use 'playwright_navigate' with a target URL. For scheduling, use standard cron syntax (e.g., "0 * * * *" for hourly). If you are unsure which tab is active or you are getting localhost/dashboard info, use relay_browser_command with action 'list' to find the correct tabId first.` }],
     };
     
     this.history = [
@@ -61,7 +62,7 @@ Guidelines: Use vision proactively when user asks about the screen. For scheduli
   }
 
   private startNewSession(history: any[]) {
-    this.chat = model.startChat({ history });
+    this.chat = this.model.startChat({ history });
     this.saveHistory();
   }
 
@@ -91,17 +92,17 @@ Guidelines: Use vision proactively when user asks about the screen. For scheduli
     }
 
     if (msgLower.startsWith('/browser')) {
-      const target = message.split(' ')[1] || '';
-      return await this.processMessage(`ACTION: Force Launch Visible Browser. URL: ${target}. Instruction: Use the browse_web tool with the "launch" action. This MUST open a visible browser window.`);
+      const target = message.split(' ')[1] || 'https://www.google.com';
+      return await this.processMessage(`ACTION: Launch Visible Browser. URL: ${target}. Instruction: Use the 'playwright_navigate' tool. The browser is configured to be visible.`);
     }
 
     if (msgLower === '/close') {
-      return await this.processMessage('Please close the browser using the browse_web tool with the "close" action.');
+      return await this.processMessage('Please stop any active browser automation tasks. (Note: MCP browser window may stay open until server restart).');
     }
 
     if (msgLower === '/status') {
       const history = await this.chat.getHistory();
-      const tokenResult = await model.countTokens({ contents: history });
+      const tokenResult = await this.model.countTokens({ contents: history });
       const tokens = tokenResult.totalTokens;
       const contextLimit = 1048576; // 1M tokens
       const usagePercent = ((tokens / contextLimit) * 100).toFixed(2);
