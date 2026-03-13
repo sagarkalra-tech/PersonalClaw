@@ -4,8 +4,10 @@ import { fileSkill } from './files.js';
 import { visionSkill } from './vision.js';
 import { clipboardSkill } from './clipboard.js';
 import { relaySkill } from './relay.js';
+import { memorySkill } from './memory.js';
 import { schedulerSkill, initScheduler } from './scheduler.js';
 import { Skill } from '../types/skill.js';
+
 import { mcpManager } from '../core/mcp.js';
 
 export const skills: Skill[] = [
@@ -16,7 +18,9 @@ export const skills: Skill[] = [
   clipboardSkill,
   relaySkill,
   schedulerSkill,
+  memorySkill,
 ];
+
 
 export { initScheduler };
 

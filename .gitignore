@@ -15,3 +15,7 @@ Thumbs.db
 # VS Code
 .vscode/
 .gemini/
+
+# Browser & Media
+browser_data/
+*.png

@@ -1,15 +1,32 @@
 # Version Log - PersonalClaw 📜
 
 All notable changes to the PersonalClaw agent will be documented in this file.
+ 
+## [1.12.0] - 2026-03-13
+### Added
+- **🧠 Continuous Learning Engine**: Implemented `manage_long_term_memory` skill, allowing PersonalClaw to learn user preferences, shorthand, and custom MSP workflows across sessions.
+- **🛠️ Tier 3 MSP Specialization**: Tailored the system prompt for high-level IT troubleshooting. Integrated awareness of `pts_tools.json` for rapid access to ITGlue, Nilear, ConnectWise, and more.
+- **⚡ Performance Overhaul**: Fixed typing lag in the dashboard by refactoring `App.tsx` and isolating the chat input into a memoized component.
+- **📋 Copy to Clipboard**: Added a one-click copy button to bot messages in the dashboard with visual "check-mark" feedback.
+- **🛡️ Developer Stability**: Added `dev:persist` script and optimized watcher exclusions (`browser_data`, `memory`, etc.) to prevent Playwright browsers from closing during code edits.
+
+---
+
+### Added
+- **🎭 Multi-Agent Orchestration**: Integrated **Paperclip AI**, enabling "Zero-Human Company" management directly within the PersonalClaw environment.
+- **🌐 Playwright MCP**: Replaced the legacy web skill with the full **Model Context Protocol (MCP)** server for Playwright, adding 22 granular browser automation tools.
+- **🚀 Dashboard Navigation**: Fixed side tabs with animated transitions. Added new dedicated views for **System Telemetry**, **File Explorer**, and **Security/Audit Logs**.
+- **📊 Context Radar**: Enhanced the `/status` command to show real-time **Token Usage** (against the 1M limit) and full session metrics.
+- **Sanitized Schemas**: Implemented a JSON Schema sanitizer to bridge complex MCP tool definitions with Gemini's API requirements.
+
+---
 
 ## [1.10.0] - 2026-03-12
 ### Added
-- **⌨️ Slash Commands**: Added quick-access commands:
-  - `/cronjob`: Lists active tasks and opens the scheduler guide.
-  - `/browser`: Launches a **visible** browser window.
-- **🌐 Persistent Browser**: Rebuilt the web engine to use `launchPersistentContext`. 
-  - Logins, cookies, and session data are now saved in `/browser_data`. 
-  - No more logging in every time you restart!
+- **⌨️ Slash Commands**: Added quick-access commands: `/cronjob`, `/browser`, `/status`, and `/help`.
+- **📸 Screenshot Preview**: Rebuilt the dashboard capture flow to show a thumbnail preview, allowing users to add a text message before sending.
+- **⚡ Typing Indicators**: Added visual feedback (animated dots) to the dashboard chat to improve user experience during AI thinking cycles.
+- **🌐 Persistent Browser**: Rebuilt the web engine to use `launchPersistentContext` to save logins and session data.
 
 ---
 

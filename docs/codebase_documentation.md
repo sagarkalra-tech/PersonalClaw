@@ -72,6 +72,8 @@ export interface Skill {
 4. **Web Browser (`browse_web`)**: Uses Playwright for `navigate`, `search`, `click`, `type`, and `extract_text`.
 5. **Vision (`analyze_vision`)**: Captures high-res screenshots and passes them to the Gemini multimodal API for UI analysis.
 6. **Clipboard (`manage_clipboard`)**: Reads and writes to the Windows system clipboard.
+7. **Long-Term Memory (`manage_long_term_memory`)**: Persists user preferences and terminology across sessions in `memory/long_term_knowledge.json`.
+
 
 ---
 

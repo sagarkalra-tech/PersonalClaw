@@ -1,24 +1,25 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import ChatInput from './components/ChatInput';
+
 import { io, Socket } from 'socket.io-client';
 import {
-  Send,
   Bot,
   User,
-  Settings,
   FileCode,
   Shield,
   LayoutDashboard,
   Activity,
   Sun,
   Moon,
-  Camera,
-  Loader2,
-  X,
   Clock,
   HardDrive,
   Cpu,
-  Database
+  Database,
+  Copy,
+  Check
 } from 'lucide-react';
+
+
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -37,7 +38,7 @@ const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([
     { id: '1', text: 'Welcome back, System Admin. PersonalClaw is active and monitoring.', sender: 'bot', timestamp: new Date() }
   ]);
-  const [inputValue, setInputValue] = useState('');
+
   const [socket, setSocket] = useState<Socket | null>(null);
   const [metrics, setMetrics] = useState({ cpu: 0, ram: '0', totalRam: '0' });
   const [isLightTheme, setIsLightTheme] = useState(false);
@@ -84,12 +85,12 @@ const App: React.FC = () => {
     }
   }, [isLightTheme]);
 
-  const handleSendMessage = () => {
-    if ((!inputValue.trim() && !pendingScreenshot) || !socket) return;
+  const handleSendMessage = useCallback((text: string) => {
+    if ((!text.trim() && !pendingScreenshot) || !socket) return;
 
     const newMessage: Message = {
       id: Date.now().toString(),
-      text: inputValue || (pendingScreenshot ? '[Sent an image for analysis]' : ''),
+      text: text || (pendingScreenshot ? '[Sent an image for analysis]' : ''),
       sender: 'user',
       timestamp: new Date(),
       image: pendingScreenshot || undefined
@@ -99,13 +100,13 @@ const App: React.FC = () => {
     setIsBotTyping(true);
     
     socket.emit('message', { 
-      text: inputValue || 'Analyze this image.', 
+      text: text || 'Analyze this image.', 
       image: pendingScreenshot 
     });
 
-    setInputValue('');
     setPendingScreenshot(null);
-  };
+  }, [pendingScreenshot, socket]);
+
 
   const handleScreenshot = async () => {
     if (!socket) return;
@@ -145,6 +146,15 @@ const App: React.FC = () => {
       setIsCapturing(false);
     }
   };
+
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopy = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
 
   return (
     <div className="dashboard-container">
@@ -250,7 +260,17 @@ const App: React.FC = () => {
                                 style={{ maxWidth: '100%', borderRadius: '8px', marginTop: '10px', border: '1px solid var(--border)' }} 
                               />
                             )}
+                            {msg.sender === 'bot' && (
+                              <button 
+                                className="copy-btn" 
+                                onClick={() => handleCopy(msg.text, msg.id)}
+                                title="Copy to clipboard"
+                              >
+                                {copiedId === msg.id ? <Check size={14} /> : <Copy size={14} />}
+                              </button>
+                            )}
                           </div>
+
                         </div>
                       </motion.div>
                     ))}
@@ -275,45 +295,14 @@ const App: React.FC = () => {
                   <div ref={messagesEndRef} />
                 </div>
 
-                <div className="input-area-outer">
-                  {pendingScreenshot && (
-                    <motion.div 
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="pending-preview"
-                    >
-                      <img src={pendingScreenshot} alt="Pending" />
-                      <button className="remove-preview" onClick={() => setPendingScreenshot(null)}>
-                        <X size={14} />
-                      </button>
-                      <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginLeft: '10px' }}>Screenshot attached. Type your request and send.</span>
-                    </motion.div>
-                  )}
-                  <div className="input-area" style={{ alignItems: 'flex-end' }}>
-                    <textarea
-                      placeholder="Ask PersonalClaw to do something..."
-                      value={inputValue}
-                      onChange={(e) => setInputValue(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          handleSendMessage();
-                        }
-                      }}
-                    />
-                    <button 
-                      className="screenshot-btn" 
-                      onClick={handleScreenshot} 
-                      disabled={isCapturing}
-                      title="Capture Screenshot"
-                    >
-                      {isCapturing ? <Loader2 size={20} className="spin" /> : <Camera size={20} />}
-                    </button>
-                    <button className="send-btn" onClick={handleSendMessage} style={{ height: '48px' }}>
-                      <Send size={20} />
-                    </button>
-                  </div>
-                </div>
+                <ChatInput 
+                  onSendMessage={handleSendMessage}
+                  onScreenshot={handleScreenshot}
+                  isCapturing={isCapturing}
+                  pendingScreenshot={pendingScreenshot}
+                  onRemoveScreenshot={() => setPendingScreenshot(null)}
+                />
+
               </motion.div>
             )}
 
@@ -553,7 +542,30 @@ const App: React.FC = () => {
           justify-content: center;
           cursor: pointer;
         }
+        .message-text {
+          position: relative;
+          padding-right: 30px !important;
+        }
+        .copy-btn {
+          position: absolute;
+          top: 0;
+          right: 0;
+          background: transparent;
+          border: none;
+          color: var(--text-dim);
+          cursor: pointer;
+          opacity: 0;
+          transition: var(--transition);
+          padding: 4px;
+        }
+        .message.bot:hover .copy-btn {
+          opacity: 1;
+        }
+        .copy-btn:hover {
+          color: var(--accent-primary);
+        }
       `}</style>
+
     </div>
   );
 };

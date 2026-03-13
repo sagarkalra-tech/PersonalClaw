@@ -4,7 +4,8 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch --exclude \"dashboard/**\" --exclude \"memory/**\" --exclude \"screenshots/**\" --exclude \"browser_data/**\" src/index.ts",
+    "dev:persist": "tsx src/index.ts",
     "dashboard": "npm run dev --prefix dashboard",
     "all": "concurrently \"npm run dev\" \"npm run dashboard\"",
     "start": "node dist/index.js",

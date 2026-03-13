@@ -23,6 +23,10 @@ To launch the PersonalClaw system, you need to run two separate commands in diff
    ```bash
    npm run dev
    ```
+3. **Persistence Mode**: For absolute stability (prevents browsers from closing during code changes):
+   ```bash
+   npm run dev:persist
+   ```
 
 Wait a few seconds for both to initialize, then head to [http://localhost:5173](http://localhost:5173)!
 
@@ -65,7 +69,13 @@ Organize, read, and create files effortlessly.
 ### ⏰ Automated Scheduling (Cron Jobs)
 PersonalClaw can now perform tasks on a schedule.
 - **Ask**: *"Schedule a job to check my email every morning at 9am"* or *"List my scheduled jobs."*
-- **Persistence**: Your jobs are saved to `\memory\scheduled_jobs.json` and will resume automatically even if you restart the server.
+- **Persistence**: Your jobs are saved to `\memory\scheduled_jobs.json`.
+
+### 🧠 Long-Term Learning (Memory)
+PersonalClaw evolves by learning from your conversations.
+- **Capabilities**: Remembers your preferred IT troubleshooting tone, your custom MSP jargon (e.g., "The Blue Box"), and specific tool shortcuts.
+- **Ask**: *"Learn that when I say 'Datto Check', I want you to log into Datto and check the alert log."*
+- **Config**: Awareness of `pts_tools.json` for rapid ITGlue/ConnectWise/Nilear access.
 
 ---
 
@@ -91,6 +101,17 @@ PersonalClaw can now perform tasks on a schedule.
 ## 🆘 Troubleshooting
 - **Extension Disconnected?** Go to `chrome://extensions` and click the **Refresh** icon.
 - **Bot not responding?** Ensure `npm run dev` is running in the main project folder.
+
+---
+
+## 🏢 Zero-Human Company (Paperclip)
+
+PersonalClaw now supports integration with **Paperclip AI**, an orchestration layer for running entire AI companies.
+
+- **Access Dashboard**: Visit `http://localhost:3100`.
+- **Launch Command**: Run `npx paperclipai onboard --yes` in your terminal to start the engine.
+- **Workflow**: Assign tickets to specialized agents (CEO, CTO, etc.) and let them work autonomously.
+- **Documentation**: See [PAPERCLIP_SOP.md](file:///c:/All Projects/PersonalClaw/docs/PAPERCLIP_SOP.md) for full setup instructions.
 
 ---
 
