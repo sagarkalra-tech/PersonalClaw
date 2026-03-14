@@ -103,6 +103,34 @@ function connect() {
             }
             return;
         }
+
+        if (data.type === 'SCRAPE_PAGE') {
+            try {
+                let targetTabId = data.tabId;
+                if (!targetTabId) {
+                    const tabs = await chrome.tabs.query({ active: true });
+                    const bestTab = tabs.find(t => !t.url.includes('localhost:5173')) || tabs[0];
+                    targetTabId = bestTab?.id;
+                }
+
+                if (!targetTabId) {
+                    socket.send(JSON.stringify({ id: data.id, result: { error: 'No suitable tab found' } }));
+                    return;
+                }
+
+                chrome.tabs.sendMessage(targetTabId, { type: 'SCRAPE_PAGE' }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        socket.send(JSON.stringify({ id: data.id, result: { error: chrome.runtime.lastError.message } }));
+                    } else {
+                        socket.send(JSON.stringify({ id: data.id, result: response?.result || response }));
+                    }
+                });
+            } catch (err) {
+                socket.send(JSON.stringify({ id: data.id, result: { error: err.message } }));
+            }
+            return;
+        }
+
     };
 
     socket.onclose = () => {

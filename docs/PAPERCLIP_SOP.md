@@ -42,6 +42,14 @@ PersonalClaw acts as your **Local Operator**. While Paperclip handles the organi
 -   **Use Paperclip for**: Strategic, multi-agent business tasks.
 -   **Use PersonalClaw for**: Direct terminal commands, browser control on your screen, and desktop automation.
 
----
+## 🔧 Troubleshooting
 
-*Status: Paperclip engine is currently being initialized in the background.*
+If the `paperclip_orchestration` skill returns errors:
+
+1. **Check server status**: Use the skill with action `check_status` to verify the Paperclip server is reachable.
+2. **Start the server**: Run `npx paperclipai onboard --yes` in a separate terminal.
+3. **Run diagnostics**: Run `npx paperclipai doctor` to verify your setup.
+4. **Check API key**: Ensure `PAPERCLIP_API_KEY` in `.env` matches your Paperclip configuration.
+
+*Status: Paperclip integration is fully configured and ready. Start the Paperclip server when you want to use multi-agent orchestration.*
+

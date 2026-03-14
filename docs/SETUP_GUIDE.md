@@ -12,7 +12,7 @@ Before you begin, ensure you have the following installed on your Windows machin
 2.  **Git**: [Download here](https://git-scm.com/).
 3.  **Python 3.10+**: [Download here](https://www.python.org/). (Ensure "Add Python to PATH" is checked during installation).
 4.  **Google Gemini API Key**: Generate a free key at [Google AI Studio](https://aistudio.google.com/).
-5.  **Chrome Browser**: Required for the Browser Relay extension.
+5.  **Chrome Browser**: Required if you want to use the optional Relay extension.
 
 ---
 
@@ -26,9 +26,10 @@ cd PersonalClaw
 ```
 
 ### 2. Install Dependencies
-Install the Brain's dependencies:
+Install the Brain's dependencies and the Playwright browser:
 ```bash
 npm install
+npx playwright install chromium
 ```
 Install the Dashboard's dependencies:
 ```bash
@@ -44,9 +45,9 @@ cd ..
 
 ---
 
-## 🖱️ Browser Extension Setup
+## 🖱️ Browser Setup (Optional Extension)
 
-To allow PersonalClaw to control your browser:
+The agent now has **built-in browser control** that doesn't requires an extension. However, if you want the agent to interact with your *existing* open Chrome tabs:
 1. Open Chrome and go to `chrome://extensions`.
 2. Enable **Developer Mode** (top right toggle).
 3. Click **Load unpacked**.

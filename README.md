@@ -5,11 +5,9 @@
 
 ![PersonalClaw Logo](docs/assets/logo.png)
 
-## ✨ Features
-
-- **👁️ Proactive Vision**: Analyze any window, screenshot, or browser tab.
+- **👁️ Vision & Screenshots**: Capture and analyze any window or whole screen instantly.
 - **🐚 PowerShell Brain**: Execute complex system tasks via natural language.
-- **🌐 Browser Relay**: Control and scrape your active Chrome tabs via our custom extension.
+- **🌐 Unified Browser**: Advanced, persistent browser control (Navigation, Scrape, Click, Type) built-in.
 - **📱 Telegram Bridge**: Command your PC from anywhere in the world securely.
 - **📂 Full File Access**: Manage your local filesystem effortlessly.
 - **🌑 Glassmorphic UI**: Premium Dark/Light mode dashboard with real-time system metrics.

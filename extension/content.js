@@ -11,6 +11,17 @@
 
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.log('Received Action:', request);
+        
+        if (request.type === 'SCRAPE_PAGE') {
+            const content = {
+                title: document.title,
+                url: window.location.href,
+                text: getSimplifiedText()
+            };
+            sendResponse({ success: true, result: content });
+            return false;
+        }
+
         if (request.type === 'HUMAN_ACTION') {
             handleAction(request).then(res => {
                 console.log('Action Result:', res);
@@ -19,6 +30,23 @@
             return true;
         }
     });
+
+    function getSimplifiedText() {
+        // Simple scraper: Get all text from main content areas, ignoring script/style
+        const clone = document.body.cloneNode(true);
+        const forbidden = clone.querySelectorAll('script, style, nav, footer, iframe, svg, [aria-hidden="true"]');
+        forbidden.forEach(el => el.remove());
+        
+        // Replace block elements with newlines to preserve some structure
+        const blocks = clone.querySelectorAll('div, p, h1, h2, h3, h4, h5, h6, tr, li');
+        blocks.forEach(el => {
+            const nl = document.createTextNode('\n');
+            el.parentNode.insertBefore(nl, el);
+        });
+
+        return clone.innerText.replace(/\n\s*\n/g, '\n').substring(0, 15000); // Limit to stay sane
+    }
+
 
     async function handleAction(data) {
         try {

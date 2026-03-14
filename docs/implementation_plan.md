@@ -9,30 +9,31 @@ Building a custom, lightweight AI agent for direct Windows control, featuring a 
 - **Interfaces:**
   - **Telegram Bot:** For remote command and control.
   - **Web Dashboard:** A high-end Vite + React UI for real-time monitoring, logs, and manual intervention.
-- **Execution Layer:** Shell (PowerShell), Python runner, and Browser automation (Playwright).
+- **Execution Layer:** Shell (PowerShell), Python runner, and Unified Browser automation (Playwright + Persistent Profile).
 
 ## 📅 Roadmap
 
 ### Phase 1: Foundation & Core Logic
-- [ ] **Project Setup:** Initialize Node.js environment with TypeScript and Vite.
-- [ ] **Gemini Integration:** Configure `@google/generative-ai` with structured tool calling.
-- [ ] **The "Brain":** Implement the main loop that handles long-running tasks and memory.
+- [x] **Project Setup:** Initialize Node.js environment with TypeScript and Vite.
+- [x] **Gemini Integration:** Configure `@google/generative-ai` with structured tool calling.
+- [x] **The "Brain":** Implement the main loop that handles long-running tasks and memory.
 
 ### Phase 2: Windows Skill System
-- [ ] **FileSystem Skill:** Secure file CRUD operations.
-- [ ] **Shell Skill:** PowerShell execution with safety guards.
-- [ ] **Python Runner:** Capability to execute arbitrary Python scripts.
-- [ ] **Vision Skill:** Gemini-powered image analysis (screenshots/local files).
-- [ ] **Web Skill:** Playwright-based browser control for search and navigation.
+- [x] **FileSystem Skill:** Secure file CRUD operations.
+- [x] **Shell Skill:** PowerShell execution with safety guards.
+- [x] **Python Runner:** Capability to execute arbitrary Python scripts.
+- [x] **Vision Skill:** Gemini-powered image analysis (screenshots/local files).
+- [x] **Unified Browser Skill:** Advanced persistent browser control (Replaces MCP/Stagehand).
 
 ### Phase 3: Communication Channels
-- [ ] **Telegram Bot:** Set up `telegraf` for two-way communication.
-- [ ] **Websocket Server:** Real-time data stream for the dashboard.
-- [ ] **Web Dashboard:** Build a "Pro-level" UI (Dark mode, glassmorphism, terminal output).
+- [x] **Telegram Bot:** Set up `telegraf` for two-way communication.
+- [x] **Websocket Server:** Real-time data stream for the dashboard.
+- [x] **Web Dashboard:** Build a "Pro-level" UI (Dark mode, glassmorphism, terminal output).
 
 ### Phase 4: Full Windows Control
-- [ ] **System Automation:** Media controls, app launching, and window management.
-- [ ] **Tasker Integration:** (Optional) Bridge for the OnePlus 12 server synergy.
+- [/] **System Automation:** Media controls, app launching, and window management.
+- [x] **Paperclip Integration:** Multi-agent orchestration layer.
+- [x] **Tasker Integration:** Bridge for the OnePlus 12 server synergy.
 
 ## 🛠️ Tech Stack
 - **Language:** TypeScript

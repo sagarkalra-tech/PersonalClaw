@@ -8,8 +8,10 @@
     "dev:persist": "tsx src/index.ts",
     "dashboard": "npm run dev --prefix dashboard",
     "all": "concurrently \"npm run dev\" \"npm run dashboard\"",
+    "browser": "powershell -ExecutionPolicy Bypass -File ./scripts/launch_persistent_browser.ps1",
     "start": "node dist/index.js",
     "build": "tsc"
+
   },
   "keywords": [],
   "author": "Sagar Kalra",
@@ -25,10 +27,12 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@browserbasehq/stagehand": "^3.1.0",
     "@google/generative-ai": "^0.24.1",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@playwright/mcp": "^0.0.68",
     "@playwright/test": "^1.58.2",
+    "axios": "^1.13.6",
     "clipboardy": "^5.3.1",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",

@@ -15,9 +15,10 @@ export const relaySkill: Skill = {
         properties: {
             action: {
                 type: 'string',
-                enum: ['list', 'execute', 'human_action'],
-                description: '"list" tabs, "execute" JS, or "human_action" for click/type.'
+                enum: ['list', 'execute', 'human_action', 'scrape'],
+                description: '"list" tabs, "execute" JS, "human_action" for click/type, or "scrape" to get visible text.'
             },
+
             code: { 
                 type: 'string', 
                 description: 'For "execute": JS code string. For "human_action": JSON string like {"action": "click", "selector": "#button-id"} or {"action": "type", "text": "hello", "selector": "input[name=user]"}.' 
@@ -48,12 +49,15 @@ export const relaySkill: Skill = {
                 extensionSocket.send(JSON.stringify({ id, type: 'LIST_TABS' }));
             } else if (action === 'human_action') {
                 extensionSocket.send(JSON.stringify({ id, type: 'HUMAN_ACTION', code, tabId }));
+            } else if (action === 'scrape') {
+                extensionSocket.send(JSON.stringify({ id, type: 'SCRAPE_PAGE', tabId }));
             } else {
                 extensionSocket.send(JSON.stringify({ id, type: 'EXECUTE_ON_PAGE', code, tabId }));
             }
         });
     }
 };
+
 
 export const handleExtensionResponse = (data: any) => {
     const callback = pendingRequests.get(data.id);

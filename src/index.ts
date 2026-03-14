@@ -7,8 +7,6 @@ import * as path from 'path';
 import { Brain } from './core/brain.js';
 import { TelegramInterface } from './interfaces/telegram.js';
 import si from 'systeminformation';
-import { WebSocketServer } from 'ws';
-import { setExtensionSocket, handleExtensionResponse } from './skills/relay.js';
 import { initScheduler } from './skills/index.js';
 
 dotenv.config();
@@ -20,32 +18,6 @@ const io = new Server(server, {
     origin: '*',
   }
 });
-
-// Relay Server for Browser Extension
-const relayWs = new WebSocketServer({ port: 3001 });
-relayWs.on('connection', (ws) => {
-  console.log('[Relay] Browser Extension Connected');
-  setExtensionSocket(ws);
-  
-  ws.on('message', (message) => {
-    try {
-      const data = JSON.parse(message.toString());
-      handleExtensionResponse(data);
-    } catch (e) {
-      console.error('[Relay] Error handling message:', e);
-    }
-  });
-
-  ws.on('close', () => {
-    console.log('[Relay] Browser Extension Disconnected');
-    setExtensionSocket(null);
-  });
-});
-
-import { mcpManager } from './core/mcp.js';
-
-console.log('[Server] Initializing MCP (Playwright)...');
-await mcpManager.initialize();
 
 console.log('[Server] Initializing Brain...');
 const brain = new Brain();
@@ -127,5 +99,3 @@ app.get('/status', (req, res) => {
 server.listen(PORT, () => {
   console.log(`[Server] PersonalClaw running on http://localhost:${PORT}`);
 });
-
-// To be added: Telegram interface

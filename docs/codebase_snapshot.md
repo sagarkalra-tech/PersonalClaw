@@ -1,6 +1,6 @@
 # PersonalClaw: Codebase Snapshot 📸
 
-This document provides the full source code for the PersonalClaw system as of March 12, 2026 (v1.1.0).
+This document provides the full source code structure and core logic for the PersonalClaw system as of March 14, 2026 (v1.14.0).
 
 ---
 
@@ -11,21 +11,23 @@ PersonalClaw/
 ├── tsconfig.json
 ├── .env
 ├── docs/
-│   ├── implementation_plan.md
-│   ├── walkthrough.md
+│   ├── SETUP_GUIDE.md
+│   ├── USER_GUIDE.md
 │   ├── codebase_documentation.md
 │   ├── codebase_snapshot.md
+│   ├── implementation_plan.md
 │   └── version_log.md
 ├── src/
 │   ├── index.ts           (Main Server)
 │   ├── core/
-│   │   └── brain.ts       (AI Logic)
+│   │   ├── brain.ts       (AI Logic)
+│   │   └── browser.ts     (Unified Browser Core)
 │   ├── skills/            (System Tools)
 │   │   ├── index.ts
+│   │   ├── browser.ts     (Unified Browser Skill)
 │   │   ├── shell.ts
 │   │   ├── python.ts
 │   │   ├── files.ts
-│   │   ├── web.ts
 │   │   ├── vision.ts
 │   │   └── clipboard.ts
 │   ├── interfaces/
@@ -185,5 +187,9 @@ const App: React.FC = () => {
 ---
 
 ## 🚀 Version Log Summary
-- **v1.1.0**: Added Markdown support, Light/Dark mode, sender icons, and Gemini 3 Preview integration.
-- **v1.0.0**: Initial baseline with shell, files, web, and vision tools.
+- **v1.14.0**: Streamlined Browser Architecture. Unified 3 systems into 1. Removed MCP/Stagehand/Relay overlap.
+- **v1.13.0**: Added Stagehand AI Browser and Paperclip Orchestration.
+- **v1.12.0**: Integrated Long-Term Memory and Tier 3 MSP specializations.
+- **v1.10.0**: Added Slash Commands and Persistent Browser profiles.
+- **v1.1.0**: Added Markdown support, Light/Dark mode, and Gemini 3 Preview integration.
+- **v1.0.0**: Initial baseline.

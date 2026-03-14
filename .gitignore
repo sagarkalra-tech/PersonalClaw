@@ -2,20 +2,33 @@
 node_modules/
 dist/
 build/
+
+# Environment & Secrets
 .env
+*.key
+*.pem
 
 # Personal Data (Archives)
 memory/
 screenshots/
 
+# Session & Cookies
+SessionCookies*.txt
+*.cookies
+
 # OS specific
 .DS_Store
 Thumbs.db
 
-# VS Code
+# VS Code / IDE
 .vscode/
 .gemini/
 
 # Browser & Media
 browser_data/
 *.png
+
+# Scratch / Test files
+test_vision.js
+list_models.js
+check_ssl.ps1

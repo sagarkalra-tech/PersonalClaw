@@ -27,8 +27,8 @@ graph TD
     subgraph Skills
         Registry --> PowerShell[PowerShell Skill]
         Registry --> Python[Python Skill]
-        Registry --> Vision[Vision/Ocr Skill]
-        Registry --> Web[Playwright Web Skill]
+        Registry --> Vision[Vision Skill]
+        Registry --> Browser[Unified Browser Skill]
         Registry --> File[File System Skill]
         Registry --> Clip[Clipboard Skill]
     end
@@ -69,10 +69,11 @@ export interface Skill {
 1. **PowerShell (`execute_powershell`)**: Full OS control. Returns stdout, stderr, and success status.
 2. **Python (`run_python_script`)**: Executes arbitrary Python code. High-flexibility data processing.
 3. **Files (`manage_files`)**: Handles file CRUD: `read`, `write`, `append`, `delete`, and `list`.
-4. **Web Browser (`browse_web`)**: Uses Playwright for `navigate`, `search`, `click`, `type`, and `extract_text`.
+4. **Browser (`browser`)**: Unified Playwright interface for `navigate`, `scrape`, `click`, `type`, `screenshot`, and `evaluate`. Uses a persistent profile in `browser_data/`.
 5. **Vision (`analyze_vision`)**: Captures high-res screenshots and passes them to the Gemini multimodal API for UI analysis.
 6. **Clipboard (`manage_clipboard`)**: Reads and writes to the Windows system clipboard.
 7. **Long-Term Memory (`manage_long_term_memory`)**: Persists user preferences and terminology across sessions in `memory/long_term_knowledge.json`.
+8. **Paperclip (`paperclip_orchestration`)**: Interfaces with the Paperclip AI engine for autonomous task management.
 
 
 ---

@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { Skill } from '../types/skill';
+import { Skill } from '../types/skill.js';
+
 
 export const fileSkill: Skill = {
   name: 'manage_files',

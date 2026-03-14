@@ -1,7 +1,27 @@
 # Version Log - PersonalClaw 📜
 
 All notable changes to the PersonalClaw agent will be documented in this file.
- 
+
+---
+
+## [1.14.0] - 2026-03-14
+### Changed
+- **🚀 Browser Streamlining**: Consolidated 3 competing browser systems (Playwright MCP, Stagehand, Relay Extension) into a single unified `browser` skill.
+- **🛠️ Unified Browser Architecture**: Implemented a singleton `BrowserManager` with `launchPersistentContext` for shared login storage across all AI sessions.
+- **🧹 Cleanup**: Removed the relay extension WebSocket server (port 3001) and the MCP initialization cycle for a faster, lazier startup.
+- **🧠 Prompt Optimization**: Rebuilt the system prompt to guide the AI toward the new unified browser workflow (Scrape -> Act -> Vision).
+
+---
+
+## [1.13.0] - 2026-03-13
+### Added
+- **🎭 Stagehand AI Browser**: Integrated `@browserbasehq/stagehand`, enabling high-level natural language browser automation ("act", "extract", "observe").
+- **🏢 Paperclip Orchestration**: Added `paperclip_orchestration` skill for autonomous company ticket management and task handling.
+- **🔄 Session Consistency**: Implemented singleton pattern for Stagehand and added **Independent Browser** support (`npm run browser`) so the browser window stays open even if the terminal/dashboard is closed.
+
+
+---
+
 ## [1.12.0] - 2026-03-13
 ### Added
 - **🧠 Continuous Learning Engine**: Implemented `manage_long_term_memory` skill, allowing PersonalClaw to learn user preferences, shorthand, and custom MSP workflows across sessions.
@@ -9,6 +29,7 @@ All notable changes to the PersonalClaw agent will be documented in this file.
 - **⚡ Performance Overhaul**: Fixed typing lag in the dashboard by refactoring `App.tsx` and isolating the chat input into a memoized component.
 - **📋 Copy to Clipboard**: Added a one-click copy button to bot messages in the dashboard with visual "check-mark" feedback.
 - **🛡️ Developer Stability**: Added `dev:persist` script and optimized watcher exclusions (`browser_data`, `memory`, etc.) to prevent Playwright browsers from closing during code edits.
+
 
 ---
 

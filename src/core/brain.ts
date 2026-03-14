@@ -26,34 +26,25 @@ export class Brain {
     this.systemPrompt = {
       role: 'user',
       parts: [{ text: `You are PersonalClaw, a state-of-the-art AI agent for Windows automation and Tier 3 MSP IT Technician assistant.
-Specialization:
-- You help a Tier 3 MSP IT Technician solve complex tickets in ConnectWise Manage and Nilear.
-- Your output must be clear, concise, and technically authoritative, reflecting Tier 3 level expertise (Deep investigation, Root Cause Analysis, Level 3 Escalation tactics).
 
 Capabilities:
 - shell: Direct PowerShell control.
 - files: CRUD operations.
-- web: Advanced browser automation via Playwright MCP. You have granular tools like 'playwright_navigate', 'playwright_click', 'playwright_fill', 'playwright_screenshot', etc.
+- browser: Unified browser control with persistent login sessions. One browser, one tool.
 - vision: Screen analysis using analyze_vision.
-- python: Script execution.
-- relay_browser_command: Control ACTIVE browser tabs. Use 'list' to see tabs, 'execute' for JS, or 'human_action' (with a JSON string code like {"action":"click", "selector":"#id"}) for realistic interactions like clicking and typing.
-- manage_scheduler: Schedule recurring tasks (cron jobs). Use actions "add", "list", or "remove".
 
-Guidelines:
-- **Memory/Config**: You have a configuration file at pts_tools.json in the root directory. If the user mentions "PTS tools", you MUST read this file using the files skill to find URLs for ITGlue, Datto, Outlook, Nilear, ConnectWise, etc.
-- **Vision**: Use vision proactively to see what the tech sees on screen.
-- **Web Automation**: For web automation (ConnectWise/Nilear), prefer playwright_get_accessibility_tree to understand page structure before clicking.
-- **Navigation**: When user asks to "launch" a browser, use playwright_navigate with a target URL.
-- **Persistence**: If you are unsure which tab is active or you are getting localhost/dashboard info, use relay_browser_command with action 'list' to find the correct tabId first.
-- **Continuous Learning**: You have a 'manage_long_term_memory' tool. You should proactively use it to 'learn' new things about the user—such as their preferred tone, the meaning of their specific shorthand (e.g., PTS, MSP-specific terms), and common workflows. Periodically 'recall' this knowledge to ensure your investigative steps as a Tier 3 tech are perfectly aligned with the user's expectations.
-- **Methodology**: Do not hallucinate. If you don't know a specific MSP configuration, ask for details. Focus on investigation steps a Tier 3 tech would take (e.g., event logs, registry checks, network traces, advanced script debugging).` }],
-
-
-
+Tier 3 Guidelines:
+1. **Efficiency First**: Save the user's tokens and time.
+2. **Browser Workflow** (FOLLOW THIS ORDER):
+   a. Use browser action "scrape" FIRST to understand any page. This is the cheapest call.
+   b. Use browser action "click" or "type" to interact (pass visible text like "Sign In" or a CSS selector).
+   c. Use browser action "navigate" to go to URLs.
+   d. Use browser action "screenshot" ONLY when you need to see the visual layout.
+   e. Use browser action "evaluate" for advanced JS when scrape/click/type aren't enough.
+3. **Vision Use**: Do NOT use vision for general information. Only use it if the user asks "what do you see" or if text scraping fails to explain a layout.
+4. **MSP Focus**: You are a specialist in ITGlue, Meraki, ConnectWise, and Nilear. You look for root causes, logs, and deep technical details.` }],
     };
 
-
-    
     this.history = [
       this.systemPrompt,
       {
@@ -103,74 +94,65 @@ Guidelines:
       return await this.resetChat();
     }
 
-    if (msgLower === '/cronjob') {
-      return await this.processMessage('Please list my current scheduled jobs and explain how I can add a new one.');
-    }
-
-    if (msgLower.startsWith('/browser')) {
-      const target = message.split(' ')[1] || 'https://www.google.com';
-      return await this.processMessage(`ACTION: Launch Visible Browser. URL: ${target}. Instruction: Use the 'playwright_navigate' tool. The browser is configured to be visible.`);
-    }
-
-    if (msgLower === '/close') {
-      return await this.processMessage('Please stop any active browser automation tasks. (Note: MCP browser window may stay open until server restart).');
-    }
-
     if (msgLower === '/status') {
       const history = await this.chat.getHistory();
       const tokenResult = await this.model.countTokens({ contents: history });
       const tokens = tokenResult.totalTokens;
-      const contextLimit = 1048576; // 1M tokens
-      const usagePercent = ((tokens / contextLimit) * 100).toFixed(2);
-      
       const tools = getToolDefinitions().map((t: any) => t.functionDeclarations[0].name);
       
-      return `📊 **PersonalClaw Status**:
-- **Session ID**: \`${this.sessionId}\`
-- **Model**: \`gemini-3-flash-preview\`
-- **Context Usage**: \`${tokens.toLocaleString()}\` / \`${contextLimit.toLocaleString()}\` tokens (**${usagePercent}%**)
-- **Turn Count**: \`${history.length}\` message turns
-- **Brain Mode**: \`Tool-Use / Reasoning\`
-- **Active Skills**: ${tools.map((t: string) => `\`${t}\``).join(', ')}
-- **Memory File**: \`memory/${this.sessionId}.json\``;
+      return `📊 **Status**: Session \`${this.sessionId}\` Active. Skills: ${tools.length} total.`;
     }
 
     if (msgLower === '/help') {
-      return `🛸 **PersonalClaw Commands**:
-- \`/new\`: Start a fresh AI session.
-- \`/status\`: Check LLM session and context status.
-- \`/browser [url]\`: Launch a **visible**, persistent Chrome window.
-- \`/close\`: Close the active browser.
-- \`/cronjob\`: Manage your scheduled tasks.
-- \`/help\`: Show this menu.`;
+      return `🛸 **Commands**: /new, /status, /help. Tip: Use Relay/Scrape for Nilear/Meraki!`;
     }
-
-    console.log(`[Brain] Processing message: "${message.substring(0, 50)}${message.length > 50 ? '...' : ''}"`);
-    console.log('[Brain] Contacting Gemini...');
 
     let result = await this.chat.sendMessage(message);
     let response = result.response;
 
-    // Handle tool calls in a loop (for chained actions)
+    let turns = 0;
+    const MAX_TURNS = 15;
+
     while (response.candidates[0].content.parts.some((part: any) => part.functionCall)) {
+      if (turns >= MAX_TURNS) {
+        return "Task reached safety limit. Try a simpler request.";
+      }
+      turns++;
+
       const toolCalls = response.candidates[0].content.parts.filter((part: any) => part.functionCall);
       const toolResults = [];
 
       for (const call of toolCalls) {
         const { name, args } = call.functionCall;
-        console.log(`\x1b[35m[Brain] 🛠️  Tool Use: ${name}\x1b[0m`, args);
-        const output = await handleToolCall(name, args);
-        toolResults.push({
-          functionResponse: {
-            name,
-            response: { content: output },
-          },
-        });
+        console.log(`[Brain] Tool: ${name}`, args);
+        try {
+          const output = await handleToolCall(name, args);
+          toolResults.push({
+            functionResponse: { name, response: { content: output } },
+          });
+        } catch (e: any) {
+          toolResults.push({
+            functionResponse: { name, response: { content: `Error: ${e.message}` } },
+          });
+        }
       }
 
-      console.log('[Brain] Sending tool results back to Gemini...');
-      result = await this.chat.sendMessage(toolResults);
-      response = result.response;
+      let retryCount = 0;
+      const maxRetries = 3;
+      while (retryCount < maxRetries) {
+        try {
+          result = await this.chat.sendMessage(toolResults);
+          response = result.response;
+          break;
+        } catch (e: any) {
+          if (e.message?.includes('429')) {
+            retryCount++;
+            await new Promise(r => setTimeout(r, Math.pow(2, retryCount) * 1000));
+          } else {
+            throw e;
+          }
+        }
+      }
     }
 
     const finalTexts = response.candidates[0].content.parts
@@ -178,9 +160,6 @@ Guidelines:
       .map((part: any) => part.text)
       .join('\n');
     
-    console.log(`[Brain] Response received (\x1b[32m${finalTexts.length} chars\x1b[0m)`);
-
-    // Update local history and persist to the session-specific file
     this.history = await this.chat.getHistory();
     this.saveHistory();
 

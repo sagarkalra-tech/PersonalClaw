@@ -45,9 +45,9 @@ Wait a few seconds for both to initialize, then head to [http://localhost:5173](
 - **Security**: Locked to your specific Chat ID (Defined in your `.env`). No one else can command it.
 - **Usage**: Send text or photos from anywhere in the world to trigger your machine.
 
-### 3. Browser Relay (Active Control)
-- **Extension**: Load from the `/extension` folder in Chrome.
-- **Power**: Allows the agent to "see" your active browser tabs, scrape data, and click buttons on real sites.
+### 3. Unified Browser (Built-in)
+- **Power**: The agent now features a built-in persistent browser context. It can navigate, scrape, click, and type on any website without needing your manual Chrome window to be open.
+- **Logins**: Your logins are saved automatically in `browser_data/`. You only need to log in once!
 
 ---
 
@@ -79,15 +79,12 @@ PersonalClaw evolves by learning from your conversations.
 
 ---
 
-## 🛠️ Key Commands
-
 > [!IMPORTANT]
 > **`/new`**: Starts a fresh session (clears memory).
-> **`/status`**: Shows current session ID, context size, and loaded tools.
-> **`/cronjob`**: Lists and helps you manage your scheduled tasks.
-> **`/browser [url]`**: Launches a **visible** Chrome window with a persistent "PersonalClaw" profile (saves all your logins and history).
-> **`/close`**: Safely closes the automated browser.
-> **`/help`**: Shows all available commands.
+> **`/status`**: Shows current session ID and loaded tools.
+> **Action: "scrape"**: Get the text content of the current page.
+> **Action: "screenshot"**: Take a visual capture of the page.
+> **Action: "close"**: Safely closes the automated browser.
 
 ---
 
