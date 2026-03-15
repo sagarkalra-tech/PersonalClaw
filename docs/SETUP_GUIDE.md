@@ -1,6 +1,6 @@
-# 🏁 First-Time Setup Guide: PersonalClaw
+# 🏁 First-Time Setup Guide: PersonalClaw v10.0
 
-Follow these steps to get PersonalClaw running on your fresh Windows device.
+Welcome to PersonalClaw v10.0! Follow these steps to get the latest version running on your Windows device.
 
 ---
 

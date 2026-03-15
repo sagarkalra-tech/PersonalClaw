@@ -1,14 +1,19 @@
-# PersonalClaw: End-User Guide 🛸
+# PersonalClaw v10.0: End-User Guide 🛸
 **Developed by Sagar Kalra**
 
 ![PersonalClaw Logo](assets/logo.png)
 
-Welcome to **PersonalClaw**, your high-performance AI agent for Windows automation and remote control. This guide will help you master your new digital companion.
+Welcome to **PersonalClaw v10.0**, your next-generation AI agent for Windows. This guide teaches you to leverage its full power.
 
 ---
 
-## 🌟 Introduction
-PersonalClaw is a private, local AI agent powered by **Gemini 3 Flash**. It gives you eyes and hands on your Windows machine, accessible via a web dashboard or a secure Telegram bot.
+## 🌟 What is PersonalClaw?
+
+PersonalClaw is a sophisticated, locally-hosted AI agent powered by **Google Gemini** with intelligent failover. It gives you AI-powered control over your Windows machine via:
+
+- **Web Dashboard** — Real-time chat, system metrics, activity feed, command palette
+- **Telegram Bot** — Control from anywhere securely
+- **REST API** — External integrations
 
 ---
 

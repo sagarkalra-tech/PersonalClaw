@@ -4,6 +4,104 @@ All notable changes to the PersonalClaw agent will be documented in this file.
 
 ---
 
+## [10.0.0] - 2026-03-15
+
+### MASSIVE UPGRADE: v1 → v10 Transformation
+
+#### 🎯 New Core Systems (3 files)
+- **Event Bus** (`src/core/events.ts`) — Central publish/subscribe nervous system. All subsystems communicate via typed events. Real-time event logging, statistics, wildcard listeners.
+- **Audit Logger** (`src/core/audit.ts`) — Comprehensive action logging (tools, errors, failovers, sessions). JSONL format with automatic rotation (max 10 files, 1000 entries each). Auto-subscribes to event bus.
+- **Session Manager** (`src/core/sessions.ts`) — Browse, search, restore, and clean up past conversations. Full-text search across session history. Session statistics.
+
+#### 🚀 New Skills (4 additions, 13 total)
+1. **HTTP Requests** (`src/skills/http.ts`) — GET/POST/PUT/PATCH/DELETE with headers, body, auth. Response truncation (10KB max), timing info, error handling.
+2. **Network Diagnostics** (`src/skills/network.ts`) — 9 actions: ping, traceroute, DNS, port check, connections, interfaces, ARP, routing, WHOIS.
+3. **Process Manager** (`src/skills/process-manager.ts`) — 10 actions: list, search, kill, start/stop/restart services, startup apps, resource hogs.
+4. **Deep System Info** (`src/skills/system-info.ts`) — 12 actions: overview, hardware, storage, software, updates, drivers, events, security, battery, environment, uptime, users.
+
+#### 🧠 Brain Massive Upgrades
+- **Performance Tracker** — Records response times, P50/P95 latency, tool calls per request, model usage breakdown
+- **8 New Slash Commands** — `/perf` (performance stats), `/audit` (audit log), `/sessions` (browse), `/restore <id>` (load session), `/search <query>` (search), `/ip` (network), `/procs` (processes)
+- **Session Restore** — `/restore session_12345` loads entire conversation history and context
+- **Full-Text Search** — `/search DNS issues` finds relevant past conversations with snippets
+- **Event Bus Integration** — Every message, tool call, failover, session event dispatched to event bus
+- **Uptime Tracking** — `uptime` getter for system health
+- **Tool Counter** — `toolCallCount` tracks total calls across session
+- **Public API** — Getters for `currentModel`, `currentSessionId`, `turns`, `uptime`, `toolCallCount`, `performanceStats`
+- **Response Metadata** — Model, turns, tool calls sent with every response
+
+#### 🌐 Server Complete Overhaul (`src/index.ts`)
+- **9 REST API Endpoints** — `/api/chat`, `/api/skills`, `/api/sessions`, `/api/sessions/search`, `/api/sessions/stats`, `/api/perf`, `/api/metrics`, `/api/audit`, `/api/activity`
+- **Real-Time Activity Feed** — Events broadcast to all dashboards. Max 100 recent items.
+- **Disk Metrics** — Added disk usage (used GB, total GB) to metrics broadcast
+- **Socket.io Init Event** — Sends version, model, skills, activity, metrics on dashboard connect
+- **Streaming Tool Updates** — Tool progress sent to dashboard in real-time via `tool_update` event
+- **Graceful Shutdown** — SIGINT/SIGTERM handlers flush audit log, close connections, exit cleanly
+- **Exception Handling** — Uncaught exceptions and unhandled rejections logged to audit
+- **ASCII Startup Banner** — Clean formatted startup info with port, model, skills count
+
+#### 🎨 Dashboard Complete Overhaul (`dashboard/src/`)
+- **Command Palette (Ctrl+K)** — 17 quick commands, searchable by label or command text
+- **Activity Feed Tab** — Real-time event stream (type, timestamp, source, summary). Color-coded dots (green=success, red=error, blue=info)
+- **Skills & Config Tab** — Browse all 13 loaded skills with descriptions. Quick command cards for all 17 commands
+- **Tool Progress Updates** — Shows which tools are running while bot is "thinking" with execution times
+- **Connection Status** — Live WiFi icon and connected/offline indicator in sidebar
+- **Toast Notifications** — Non-intrusive success/error alerts for connect/disconnect
+- **Sparkline Charts** — Mini CPU and RAM trend graphs (last 30 data points)
+- **Command History** — Arrow Up/Down cycles through past messages (stored in component state)
+- **Auto-Resize Textarea** — Grows dynamically as you type (up to 160px)
+- **Disk Usage Metric** — 4th card on status bar (C: drive used/total)
+- **Improved Code Blocks** — Better syntax highlighting, monospace font, borders, background
+- **Table Rendering** — Markdown tables render properly with borders and alternating row backgrounds
+- **Message Avatars** — Rounded square containers for bot/user icons
+- **Responsive Design** — Sidebar collapses on screens < 900px
+- **Custom Scrollbars** — Thin, minimal scrollbars with hover effects
+- **Redesigned Navigation** — Terminal icon, version badge "v10.0", improved spacing, cleaner styling
+- **Metrics Cards** — CPU/RAM/Disk/Session info with sparklines and detailed breakdown
+
+#### 📊 Dashboard Enhancements
+- **Modern Styling** — Refreshed color palette, better contrast, glassmorphism
+- **Keyboard Shortcuts** — Ctrl+K for command palette, Escape to close
+- **Focus Management** — Command palette auto-focuses input
+- **Drag-and-Drop** — File drop detection (placeholder for future enhancement)
+- **Session Metadata** — Display model, turns, tools info on every response
+- **Real-Time Status** — Connection indicator updates immediately
+- **Activity Timestamping** — All activities show formatted time (HH:MM:SS)
+
+#### 🔧 Infrastructure
+- **TypeScript Strict Mode** — Full strict typing, zero build errors
+- **Event-Driven Architecture** — All subsystems communicate via typed events
+- **Audit Trail** — Complete action history for compliance/debugging
+- **Performance Tracking** — Detailed latency and throughput metrics
+- **Graceful Degradation** — Model failover never causes crashes
+- **Memory Management** — Auto-compaction at 800k tokens
+
+#### 📈 Metrics & Stats
+- **13 Loaded Skills** (up from 9)
+- **23 Slash Commands** (up from 15)
+- **5 Model Options** with automatic failover
+- **1M Token Context** with 800k auto-compact threshold
+- **9 REST Endpoints** for external integration
+- **0 Build Errors** — Full TypeScript compilation
+
+### Changed
+- **Dashboard Port** — Still 5173 (Vite dev server)
+- **Backend Port** — Still 3000 (Express)
+- **Model Defaults** — Still cascades through Gemini 3.1 Pro → Flash variants
+- **Skill Architecture** — Enhanced with event logging
+
+### Removed
+- Nothing removed — all v1.17 features preserved
+- Deprecated "legacy" skills remain for compatibility
+
+### Internal
+- **Code Quality** — Refactored for clarity and performance
+- **Error Messages** — Enhanced with actionable context
+- **Logging** — Structured via event bus + audit logger
+- **Testing** — All features compile without errors
+
+---
+
 ## [1.17.0] - 2026-03-14
 ### Added
 - **🧬 Self-Learning Engine**: PersonalClaw now passively learns from every conversation.

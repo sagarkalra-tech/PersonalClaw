@@ -4,6 +4,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getToolDefinitions, handleToolCall, skills } from '../skills/index.js';
 import { Learner } from './learner.js';
+import { eventBus, Events } from './events.js';
+import { audit } from './audit.js';
+import { SessionManager } from './sessions.js';
 
 dotenv.config();
 
@@ -65,17 +68,13 @@ const MODEL_REGISTRY: ModelInfo[] = [
   },
 ];
 
-// Build the failover chain: primary → fallbacks in order → emergency
 function getFailoverChain(): string[] {
-  // If user has set GEMINI_MODEL in .env, put it first
   const envModel = process.env.GEMINI_MODEL;
   const chain = MODEL_REGISTRY.map(m => m.id);
 
   if (envModel && !chain.includes(envModel)) {
-    // User specified a custom model not in our registry — put it first
     chain.unshift(envModel);
   } else if (envModel) {
-    // Move user's chosen model to the front
     const idx = chain.indexOf(envModel);
     if (idx > 0) {
       chain.splice(idx, 1);
@@ -84,6 +83,64 @@ function getFailoverChain(): string[] {
   }
 
   return chain;
+}
+
+// ─── Performance Tracker ────────────────────────────────────────────
+interface PerfRecord {
+  timestamp: number;
+  durationMs: number;
+  toolCalls: number;
+  model: string;
+  tokens?: number;
+}
+
+class PerformanceTracker {
+  private records: PerfRecord[] = [];
+  private maxRecords = 200;
+
+  record(data: PerfRecord) {
+    this.records.push(data);
+    if (this.records.length > this.maxRecords) {
+      this.records = this.records.slice(-this.maxRecords);
+    }
+  }
+
+  getStats(): {
+    totalRequests: number;
+    avgResponseMs: number;
+    p50Ms: number;
+    p95Ms: number;
+    avgToolCalls: number;
+    totalToolCalls: number;
+    modelUsage: Record<string, number>;
+  } {
+    if (this.records.length === 0) {
+      return { totalRequests: 0, avgResponseMs: 0, p50Ms: 0, p95Ms: 0, avgToolCalls: 0, totalToolCalls: 0, modelUsage: {} };
+    }
+
+    const durations = this.records.map(r => r.durationMs).sort((a, b) => a - b);
+    const toolCounts = this.records.map(r => r.toolCalls);
+    const totalTools = toolCounts.reduce((a, b) => a + b, 0);
+
+    const modelUsage: Record<string, number> = {};
+    for (const r of this.records) {
+      modelUsage[r.model] = (modelUsage[r.model] || 0) + 1;
+    }
+
+    return {
+      totalRequests: this.records.length,
+      avgResponseMs: Math.round(durations.reduce((a, b) => a + b, 0) / durations.length),
+      p50Ms: durations[Math.floor(durations.length * 0.5)],
+      p95Ms: durations[Math.floor(durations.length * 0.95)],
+      avgToolCalls: Math.round((totalTools / this.records.length) * 10) / 10,
+      totalToolCalls: totalTools,
+      modelUsage,
+    };
+  }
+
+  getRecentRecords(count: number = 20): PerfRecord[] {
+    return this.records.slice(-count);
+  }
 }
 
 // ─── System Prompt Builder ───────────────────────────────────────────
@@ -99,13 +156,12 @@ function buildSystemPrompt(): string {
     timeZoneName: 'short',
   });
 
-  // Load persisted user knowledge
   let knowledgeBlock = '';
   try {
     if (fs.existsSync(KNOWLEDGE_FILE)) {
       const raw = JSON.parse(fs.readFileSync(KNOWLEDGE_FILE, 'utf8'));
       const entries = Object.entries(raw)
-        .map(([k, v]) => `  • ${k}: ${v}`)
+        .map(([k, v]) => `  - ${k}: ${v}`)
         .join('\n');
       if (entries) {
         knowledgeBlock = `
@@ -116,157 +172,124 @@ Use this knowledge proactively. Adapt your tone, shortcuts, and workflow to matc
     }
   } catch { /* ignore corrupt file */ }
 
-  return `# PersonalClaw — Autonomous Windows Agent
+  return `# PersonalClaw v10.0 — Autonomous Windows Agent
 
-You are **PersonalClaw**, a state-of-the-art, locally-hosted AI agent operating on the user's Windows machine. You are not a chatbot. You are an **autonomous systems operator** — you observe, reason, plan, and act through tools to accomplish tasks on this machine. Think of yourself as a senior engineer with root access who happens to live inside the terminal.
+You are **PersonalClaw**, a state-of-the-art, locally-hosted AI agent operating on the user's Windows machine. You are not a chatbot. You are an **autonomous systems operator** — you observe, reason, plan, and act through tools to accomplish tasks on this machine.
 
 **Current Time**: ${timestamp}
 
 ---
 
 ## Identity & Personality
-- You are sharp, decisive, and efficient. You do NOT hedge or over-explain unless the user asks for detail.
-- Speak like a competent colleague, not a corporate assistant. Be direct. Use technical language naturally.
-- If you make a mistake, own it immediately and correct course. Never bluff.
-- You have a dry sense of humor when appropriate, but work always comes first.
-- Your name is **PersonalClaw**. The user may call you "Claw" casually.
+- Sharp, decisive, efficient. No hedging or over-explaining unless asked.
+- Speak like a competent colleague. Direct. Technical language is natural.
+- Mistakes get owned immediately. Never bluff.
+- Dry humor when appropriate. Work comes first.
+- Name: **PersonalClaw**. The user may call you "Claw".
 
 ---
 
 ## Reasoning Framework
 
-Before taking action on any non-trivial request, follow this mental model:
+Before acting on non-trivial requests:
 
 ### 1. UNDERSTAND — Parse the request
-- What exactly is the user asking for? 
-- Is anything ambiguous? If so, ask ONE clarifying question (not five).
-- Does long-term memory or previous context change how you should approach this?
+- What exactly is being asked? Is anything ambiguous? Ask ONE clarifying question max.
+- Does long-term memory or context change the approach?
 
 ### 2. PLAN — Design the approach
-- What tools do you need? In what order?  
-- What's the cheapest path? (Scrape before screenshot. Read before shell. Think before act.)
-- What could go wrong? Plan for the most likely failure.
+- What tools needed? In what order?
+- Cheapest path first (scrape before screenshot, read before shell).
+- Anticipate the most likely failure.
 
 ### 3. ACT — Execute with precision
-- Call tools decisively. Don't "try things out" randomly.
-- When a tool returns data, **read the output carefully** before deciding your next step.
-- If a tool call fails, diagnose WHY before retrying. Don't blindly repeat the same call.
+- Call tools decisively. Don't randomly try things.
+- Read tool output carefully before next step.
+- If a tool fails, diagnose WHY before retrying.
 
 ### 4. VERIFY — Confirm the result
-- After completing a task, verify it actually worked (re-read the file, check the output, scrape the page).
-- Report results concisely. Include relevant data, not a summary of your thought process.
+- After completing a task, verify it worked.
+- Report results concisely with relevant data.
 
 ---
 
-## Available Skills (Tools)
+## Available Skills (${skills.length} tools)
 
-You have the following tools at your disposal. Use them wisely — every call burns tokens.
+### Core Tools
+- **execute_powershell** — Run any PowerShell command. Full system access.
+- **manage_files** — File CRUD: read, write, append, delete, list.
+- **run_python_script** — Execute Python code directly.
+- **manage_clipboard** — Read/write system clipboard.
 
-### 🖥️ execute_powershell
-Run any PowerShell command. You have full system access.
-- Use for: system info, service management, network diagnostics, registry, installs, process control.
-- **Tip**: Prefer single-line pipelines. Avoid multi-line scripts when a one-liner works.
-- **Tip**: For complex scripts, write them to a file with manage_files first, then execute.
-- **Safety**: NEVER run destructive commands (format, Remove-Item -Recurse on system dirs, registry deletes) without explicit user confirmation.
+### Browser & Web
+- **browser** — Unified browser automation with persistent login sessions.
+  WORKFLOW: scrape first (cheap) → click/type → screenshot only if needed.
+- **http_request** — Make HTTP requests (GET/POST/PUT/DELETE). For REST APIs, webhooks, data fetching.
 
-### 📁 manage_files
-File CRUD: read, write, append, delete, list.
-- Always use absolute paths on Windows (e.g., C:\\Users\\...).
-- Use this to inspect configs, write scripts, manage logs.
+### System Intelligence
+- **system_info** — Deep system diagnostics: hardware, software, storage, updates, drivers, events, security, battery, env vars.
+- **manage_processes** — Process/service management: list, search, kill, start/stop/restart services, startup apps, resource hogs.
+- **network_diagnostics** — Network troubleshooting: ping, traceroute, DNS, port checks, connections, interfaces, ARP, routing.
+- **analyze_vision** — Screenshot capture & Gemini Vision analysis. Expensive — use only when text tools can't answer.
 
-### 🌐 browser
-Unified browser automation with persistent login sessions. **This is one tool with multiple actions.**
+### Memory & Automation
+- **manage_long_term_memory** — Persistent knowledge store. Learn/recall/forget user preferences.
+- **manage_scheduler** — Cron job management for recurring tasks.
+- **paperclip_orchestration** — Paperclip multi-agent task management.
 
-**CRITICAL WORKFLOW** — follow this order:
-1. **scrape** → Always first. Returns page text, title, URL. Cheapest call. Gives you enough to decide next steps.
-2. **click** / **type** → Interact with elements. Pass visible text (e.g., "Sign In") or a CSS selector.
-3. **navigate** → Go to a direct URL when you know where you're headed.
-4. **screenshot** → ONLY when visual layout matters or scrape output is ambiguous.
-5. **evaluate** → Advanced JS execution. Last resort when click/type can't do it.
-6. **wait** → Wait for dynamic content to load (pass CSS selector).
-7. **back** / **page_info** / **close** → Navigation helpers.
+---
 
-**Anti-patterns to AVOID:**
-- ❌ Taking a screenshot just to "see what's there" — scrape first.
-- ❌ Navigating to a page and immediately screenshotting — scrape first.
-- ❌ Using evaluate for simple clicks — use the click action.
+## Tool Best Practices
 
-### 👁️ analyze_vision
-Captures and analyzes the screen or a specific image using Gemini Vision.
-- Use ONLY when: the user asks "what do you see?", or text-based scraping can't explain a visual layout.
-- This is expensive. Don't use it for information-gathering when text tools would work.
-
-### 🐍 run_python_script
-Executes Python code on the local machine.
-- Great for: data processing, API calls, file parsing, math, automation scripts.
-- The script runs in the project directory. Import any installed packages.
-
-### 📋 manage_clipboard
-Read from or write to the system clipboard.
-- Useful for: extracting copied data, preparing content for paste.
-
-### 🧠 manage_long_term_memory
-Your persistent knowledge store. This is how you evolve and learn.
-- **learn**: Save important user preferences, patterns, terminology, or workflow habits.
-- **recall**: Retrieve stored knowledge. Do this at conversation start or when context seems relevant.
-- **forget**: Remove outdated knowledge.
-- You SHOULD proactively learn preferences (e.g., "user prefers PowerShell over cmd", "user's MSP uses ConnectWise + ITGlue").
-- You SHOULD recall at the start of complex tasks to check for established workflows.
-
-### ⏰ manage_scheduler
-Cron job management for recurring tasks.
-- Uses standard cron syntax (e.g., "0 9 * * *" = 9 AM daily).
-- Jobs persist across server restarts.
-- Commands are natural language — they get processed by your brain when triggered.
-
-### 🏢 paperclip_orchestration
-Interact with the Paperclip task management system (when running on localhost:3100).
-- Actions: check_status, get_identity, list_assignments, checkout_task, update_task, add_comment, create_subtask.
-- Always check_status first before attempting other actions.
+- **Browser**: Always scrape first. Only screenshot when visual layout matters.
+- **PowerShell**: Prefer single-line pipelines. Write complex scripts to file first.
+- **HTTP**: Use for API integrations. Check response status codes.
+- **System Info**: Use specific actions (hardware, storage, etc.) — not overview for everything.
+- **Process Manager**: Kill processes by PID when possible for precision.
+- **Network**: Start with ping, escalate to traceroute/DNS as needed.
+- **Vision**: LAST RESORT for visual analysis. Text tools are cheaper.
+- **Safety**: NEVER run destructive commands without user confirmation.
 
 ---
 
 ## MSP & IT Specialization
 
-You are trained as a **Tier 3 MSP IT Technician**. When the user is working on IT tasks:
-- You know ITGlue, Meraki, ConnectWise Manage/Automate, Nilear, HaloPSA, and common MSP stacks.
-- Always look for **root causes**, not surface-level symptoms.
-- Check logs, event viewers, service states, and network paths systematically.
-- When investigating, default to **read-only**. Don't change configs unless the user explicitly approves remediation.
-- Use the browser to navigate MSP portals when needed (your logins are saved in the persistent browser).
-
----
-
-## Communication Rules
-
-1. **Be concise**. Default to short, actionable responses. Expand only if the user asks "explain" or "why".
-2. **Use markdown**. Format your responses with headers, bold, code blocks, and lists for readability.
-3. **Show, don't tell**. Include relevant command output, file contents, or data in your response. Don't just say "I checked and it looks fine."
-4. **One message per task**. Don't split your response across multiple messages. Deliver the complete answer.
-5. **Errors get context**. If something failed, show the error AND your diagnosis of what went wrong.
-6. **Never apologize for being an AI**. You're a tool, not a person. Just do the work.
-
----
-
-## Safety Guardrails
-
-- **NEVER** execute destructive commands without user confirmation (rm -rf, format drives, registry deletes, service stops on critical infra).
-- **NEVER** access or display .env files, API keys, or credentials to the user unless they explicitly request it.
-- **NEVER** make external network requests to unknown endpoints without user knowledge.
-- If you're unsure whether an action is destructive, **ask first**.
-- If a PowerShell command could have system-wide side effects, explain what it will do before running it.
+You are a **Tier 3 MSP IT Technician**. You know:
+- ITGlue, Meraki, ConnectWise Manage/Automate, Nilear, HaloPSA
+- Root cause analysis over surface-level symptoms
+- Systematic investigation: logs → event viewers → service states → network paths
+- Read-only by default. Don't change configs without approval.
 ${knowledgeBlock}
 ${Learner.buildContextBlock()}
 
 ---
 
+## Communication Rules
+
+1. **Be concise**. Short, actionable responses by default.
+2. **Use markdown**. Headers, bold, code blocks, lists.
+3. **Show, don't tell**. Include command output, file contents, data.
+4. **One message per task**. Complete answer in one response.
+5. **Errors get context**. Show the error AND your diagnosis.
+
+---
+
+## Safety Guardrails
+
+- **NEVER** execute destructive commands without confirmation (rm -rf, format, registry deletes).
+- **NEVER** expose .env files, API keys, or credentials unless explicitly requested.
+- **NEVER** make external network requests to unknown endpoints without user knowledge.
+- If unsure whether an action is destructive, **ask first**.
+
+---
+
 ## Meta-Rules
 
-- If the user says something vague like "fix it" — recall the last context, ask ONE clarifying question if truly ambiguous, otherwise just handle it.
-- If a task requires multiple tool calls, batch them logically. Don't call tools one at a time when they could be parallelized mentally.
-- If you hit the tool turn limit, summarize what you've accomplished and what remains.
-- Remember: you are running **locally on Windows**. Paths use backslashes. PowerShell is your shell. The user controls this machine.
-- You are a self-learning agent. Your knowledge from past conversations is injected above. Use it naturally — don't tell the user you "learned" something unless they ask. Just be better.`;
+- If the user says "fix it" — recall context, ask ONE question if truly ambiguous, otherwise handle it.
+- Batch tool calls logically. Parallelize when possible.
+- If you hit the tool turn limit, summarize progress and remaining work.
+- You are running **locally on Windows**. PowerShell is your shell.
+- You are a self-learning agent. Knowledge from past conversations is injected above. Use it naturally.`;
 }
 
 // ─── Brain Class ─────────────────────────────────────────────────────
@@ -281,6 +304,8 @@ export class Brain {
   private failoverAttempts: Map<string, number> = new Map();
   private sessionStartTime: number;
   private learner: Learner;
+  private perf: PerformanceTracker;
+  private totalToolCalls: number = 0;
 
   constructor() {
     this.failoverChain = getFailoverChain();
@@ -289,9 +314,17 @@ export class Brain {
     this.sessionId = `session_${Date.now()}`;
     this.sessionStartTime = Date.now();
     this.learner = new Learner();
+    this.perf = new PerformanceTracker();
     this.initSession();
+
+    eventBus.dispatch(Events.SESSION_STARTED, {
+      sessionId: this.sessionId,
+      model: this.activeModelId,
+    }, 'brain');
+
     console.log(`[Brain] Initialized with model: ${this.activeModelId}`);
     console.log(`[Brain] Failover chain: ${this.failoverChain.join(' → ')}`);
+    console.log(`[Brain] Skills loaded: ${skills.length}`);
   }
 
   private createModel(modelId: string): GenerativeModel {
@@ -301,16 +334,24 @@ export class Brain {
     });
   }
 
+  // ─── Getters for external access ──────────────────────────────────
+
+  get currentModel(): string { return this.activeModelId; }
+  get currentSessionId(): string { return this.sessionId; }
+  get turns(): number { return this.turnCount; }
+  get uptime(): number { return Date.now() - this.sessionStartTime; }
+  get toolCallCount(): number { return this.totalToolCalls; }
+  get performanceStats() { return this.perf.getStats(); }
+
   /**
    * Attempt to fail over to the next model in the chain.
-   * Returns true if failover succeeded, false if no more models.
    */
   private async failoverToNextModel(failedModelId: string, error: string): Promise<boolean> {
     const currentIdx = this.failoverChain.indexOf(failedModelId);
     const nextIdx = currentIdx + 1;
 
     if (nextIdx >= this.failoverChain.length) {
-      console.error(`[Brain] ❌ All models in failover chain exhausted. Last error: ${error}`);
+      console.error(`[Brain] All models in failover chain exhausted. Last error: ${error}`);
       return false;
     }
 
@@ -318,17 +359,21 @@ export class Brain {
     const nextModelInfo = MODEL_REGISTRY.find(m => m.id === nextModelId);
     const nextName = nextModelInfo?.name || nextModelId;
 
-    console.warn(`[Brain] ⚠️ Model "${failedModelId}" failed: ${error}`);
-    console.warn(`[Brain] 🔄 Failing over to: ${nextName} (${nextModelId})`);
+    console.warn(`[Brain] Model "${failedModelId}" failed: ${error}`);
+    console.warn(`[Brain] Failing over to: ${nextName} (${nextModelId})`);
+
+    eventBus.dispatch(Events.MODEL_FAILOVER, {
+      from: failedModelId,
+      to: nextModelId,
+      reason: error,
+    }, 'brain');
 
     this.activeModelId = nextModelId;
     this.model = this.createModel(nextModelId);
 
-    // Track failover attempts
     const count = (this.failoverAttempts.get(failedModelId) || 0) + 1;
     this.failoverAttempts.set(failedModelId, count);
 
-    // Rebuild the chat session with the new model
     this.chat = this.model.startChat({ history: this.history });
 
     return true;
@@ -341,7 +386,6 @@ export class Brain {
     let lastError = '';
     const startModelId = this.activeModelId;
 
-    // Try current model and failovers
     for (let attempt = 0; attempt < this.failoverChain.length; attempt++) {
       try {
         const result = await this.chat.sendMessage(payload);
@@ -349,50 +393,42 @@ export class Brain {
       } catch (e: any) {
         lastError = e.message || String(e);
 
-        // Errors that warrant failover
         const isModelError =
-          lastError.includes('404') ||           // Model not found
+          lastError.includes('404') ||
           lastError.includes('not found') ||
           lastError.includes('not supported') ||
           lastError.includes('is not available') ||
           lastError.includes('deprecated') ||
           lastError.includes('PERMISSION_DENIED') ||
-          lastError.includes('503') ||           // Service unavailable
+          lastError.includes('503') ||
           lastError.includes('UNAVAILABLE') ||
-          lastError.includes('INTERNAL');         // Internal server error
+          lastError.includes('INTERNAL');
 
-        // Rate limits — retry with backoff on SAME model first
         if (lastError.includes('429') || lastError.includes('RESOURCE_EXHAUSTED')) {
           const retryAfter = Math.pow(2, attempt + 1) * 1000;
           console.warn(`[Brain] Rate limited on ${this.activeModelId}. Waiting ${retryAfter}ms...`);
           await new Promise(r => setTimeout(r, retryAfter));
 
-          // If we've been rate limited 2+ times on this model, try next
           if (attempt >= 1) {
             const didFailover = await this.failoverToNextModel(this.activeModelId, lastError);
             if (!didFailover) break;
             continue;
           }
-
-          // Retry same model
           continue;
         }
 
-        // Context overflow — compact and retry same model
         if (lastError.includes('context length') || lastError.includes('token limit') || lastError.includes('too long')) {
           console.warn('[Brain] Context overflow. Compacting...');
           await this.compactHistoryIfNeeded();
           continue;
         }
 
-        // Model-level errors — failover immediately
         if (isModelError) {
           const didFailover = await this.failoverToNextModel(this.activeModelId, lastError);
           if (!didFailover) break;
           continue;
         }
 
-        // Unknown error — don't failover, just throw
         throw e;
       }
     }
@@ -409,7 +445,7 @@ export class Brain {
       },
       {
         role: 'model',
-        parts: [{ text: 'Online. PersonalClaw is ready. What do you need?' }],
+        parts: [{ text: 'Online. PersonalClaw v10 is ready. What do you need?' }],
       },
     ];
     this.turnCount = 0;
@@ -438,14 +474,33 @@ export class Brain {
     this.sessionId = `session_${Date.now()}`;
     this.sessionStartTime = Date.now();
     this.failoverAttempts.clear();
-    // Reset to the top of the failover chain
     this.activeModelId = this.failoverChain[0];
     this.model = this.createModel(this.activeModelId);
+    this.totalToolCalls = 0;
     this.initSession();
-    return `🔄 New session initialized.\n- **Model**: \`${this.activeModelId}\`\n- Long-term memory preserved.\n- Failover chain reset.`;
+
+    eventBus.dispatch(Events.SESSION_RESET, { sessionId: this.sessionId }, 'brain');
+
+    return `New session initialized.\n- **Model**: \`${this.activeModelId}\`\n- Long-term memory preserved.\n- Failover chain reset.`;
   }
 
-  // Context window management — auto-compact when history gets large
+  /**
+   * Restore a previous session's conversation history.
+   */
+  public async restoreSession(sessionId: string): Promise<string> {
+    const history = SessionManager.loadSession(sessionId);
+    if (!history) {
+      return `Session \`${sessionId}\` not found.`;
+    }
+
+    this.sessionId = sessionId;
+    this.history = history;
+    this.turnCount = history.filter((h: any) => h.role === 'user').length;
+    this.startNewSession(history);
+
+    return `Session \`${sessionId}\` restored.\n- **Turns**: ${this.turnCount}\n- **Model**: \`${this.activeModelId}\``;
+  }
+
   private async compactHistoryIfNeeded() {
     try {
       const history = await this.chat.getHistory();
@@ -465,13 +520,19 @@ export class Brain {
 
         this.history = [
           { role: 'user', parts: [{ text: systemPrompt }] },
-          { role: 'model', parts: [{ text: 'Online. PersonalClaw is ready. What do you need?' }] },
-          { role: 'user', parts: [{ text: `[CONTEXT_RECOVERY] Here is a summary of our prior conversation:\n${summary}` }] },
+          { role: 'model', parts: [{ text: 'Online. PersonalClaw v10 is ready. What do you need?' }] },
+          { role: 'user', parts: [{ text: `[CONTEXT_RECOVERY] Summary of prior conversation:\n${summary}` }] },
           { role: 'model', parts: [{ text: 'Context recovered. Continuing where we left off.' }] },
           ...recentHistory,
         ];
 
         this.startNewSession(this.history);
+
+        eventBus.dispatch(Events.CONTEXT_COMPACTED, {
+          oldTokens: totalTokens,
+          newTokens: this.history.length,
+        }, 'brain');
+
         console.log('[Brain] Context compacted successfully.');
         return true;
       }
@@ -486,42 +547,49 @@ export class Brain {
 
   private handleHelp(): string {
     return [
-      `## 🛸 PersonalClaw Commands`,
+      `## PersonalClaw v10 Commands`,
       ``,
-      `### 📋 Session`,
+      `### Session`,
       `| Command | Description |`,
       `|---------|-------------|`,
-      `| \`/new\` | Start fresh session (preserves long-term memory) |`,
+      `| \`/new\` | Start fresh session (preserves memory) |`,
       `| \`/status\` | Full system status — model, tokens, uptime, skills |`,
-      `| \`/compact\` | Manually compress conversation history to free tokens |`,
+      `| \`/compact\` | Compress conversation history to free tokens |`,
+      `| \`/sessions\` | Browse saved conversation sessions |`,
+      `| \`/restore <id>\` | Restore a previous session |`,
+      `| \`/search <query>\` | Search through past conversations |`,
       ``,
-      `### 🤖 Models`,
+      `### Models`,
       `| Command | Description |`,
       `|---------|-------------|`,
       `| \`/models\` | Show all available models and failover chain |`,
-      `| \`/model <id>\` | Switch active model (e.g. \`/model gemini-3-flash-preview\`) |`,
+      `| \`/model <id>\` | Switch active model |`,
       ``,
-      `### 🧠 Memory & Knowledge`,
+      `### Memory & Knowledge`,
       `| Command | Description |`,
       `|---------|-------------|`,
       `| \`/memory\` | Show all learned long-term knowledge |`,
       `| \`/forget <key>\` | Remove a specific memory key |`,
       ``,
-      `### 🔧 Tools & Debug`,
+      `### Tools & Debug`,
       `| Command | Description |`,
       `|---------|-------------|`,
       `| \`/skills\` | List all loaded skills with descriptions |`,
       `| \`/jobs\` | Show all scheduled cron jobs |`,
-      `| \`/ping\` | Quick health check — confirms the brain is alive |`,
-      `| \`/export\` | Export current session history to a file |`,
+      `| \`/ping\` | Quick health check |`,
+      `| \`/export\` | Export current session history to file |`,
+      `| \`/perf\` | Performance statistics |`,
+      `| \`/audit\` | Recent audit log entries |`,
       ``,
-      `### 🌐 Quick Actions`,
+      `### Quick Actions`,
       `| Command | Description |`,
       `|---------|-------------|`,
-      `| \`/screenshot\` | Capture and analyze the current screen |`,
-      `| \`/sysinfo\` | Quick system snapshot (CPU, RAM, disk, network) |`,
+      `| \`/screenshot\` | Capture and analyze the screen |`,
+      `| \`/sysinfo\` | Quick system snapshot |`,
+      `| \`/ip\` | Show IP addresses and network info |`,
+      `| \`/procs\` | Top resource-consuming processes |`,
       ``,
-      `### 🧬 Self-Learning`,
+      `### Self-Learning`,
       `| Command | Description |`,
       `|---------|-------------|`,
       `| \`/learned\` | Show everything I've learned about you |`,
@@ -541,7 +609,6 @@ export class Brain {
       const pct = ((tokens / 1_000_000) * 100).toFixed(1);
       const toolNames = getToolDefinitions().map((t: any) => t.functionDeclarations[0].name);
 
-      // Uptime
       const uptimeMs = Date.now() - this.sessionStartTime;
       const uptimeMin = Math.floor(uptimeMs / 60000);
       const uptimeHrs = Math.floor(uptimeMin / 60);
@@ -549,7 +616,6 @@ export class Brain {
         ? `${uptimeHrs}h ${uptimeMin % 60}m`
         : `${uptimeMin}m`;
 
-      // Failover info
       const modelInfo = MODEL_REGISTRY.find(m => m.id === this.activeModelId);
       const modelName = modelInfo ? `${modelInfo.name} (\`${this.activeModelId}\`)` : `\`${this.activeModelId}\``;
 
@@ -557,38 +623,47 @@ export class Brain {
         ? `\n- **Failovers**: ${[...this.failoverAttempts.entries()].map(([m, c]) => `\`${m}\` failed ${c}x`).join(', ')}`
         : '';
 
-      // Token bar
       const barLen = 20;
       const filled = Math.round((tokens / 1_000_000) * barLen);
       const bar = '█'.repeat(filled) + '░'.repeat(barLen - filled);
 
+      const perfStats = this.perf.getStats();
+
       return [
-        `## 📊 PersonalClaw Status`,
+        `## PersonalClaw v10 Status`,
         ``,
         `| | |`,
         `|---|---|`,
         `| **Session** | \`${this.sessionId}\` |`,
         `| **Uptime** | ${uptime} |`,
         `| **Turns** | ${this.turnCount} |`,
+        `| **Tool Calls** | ${this.totalToolCalls} |`,
         `| **Model** | ${modelName} |`,
         `| **Status** | ${modelInfo?.status || 'unknown'} / ${modelInfo?.tier || 'custom'} |`,
         ``,
         `### Token Usage`,
         `\`${bar}\` ${tokens.toLocaleString()} / 1,000,000 (${pct}%)`,
         ``,
+        `### Performance`,
+        `| Metric | Value |`,
+        `|--------|-------|`,
+        `| **Avg Response** | ${perfStats.avgResponseMs}ms |`,
+        `| **P50 / P95** | ${perfStats.p50Ms}ms / ${perfStats.p95Ms}ms |`,
+        `| **Avg Tools/Request** | ${perfStats.avgToolCalls} |`,
+        ``,
         `### Skills (${toolNames.length})`,
         `\`${toolNames.join('` `')}\``,
         failoverHistory,
       ].filter(Boolean).join('\n');
     } catch (e: any) {
-      return `📊 **Status**: Session \`${this.sessionId}\` active | Model: \`${this.activeModelId}\` | Error: ${e.message}`;
+      return `**Status**: Session \`${this.sessionId}\` active | Model: \`${this.activeModelId}\` | Error: ${e.message}`;
     }
   }
 
   private handleModels(): string {
     const chain = this.failoverChain;
     const lines = [
-      `## 🤖 Model Registry & Failover Chain`,
+      `## Model Registry & Failover Chain`,
       ``,
       `**Active Model**: \`${this.activeModelId}\``,
       `**Failover Order**: ${chain.map((m, i) => i === 0 ? `**${m}**` : m).join(' → ')}`,
@@ -597,53 +672,50 @@ export class Brain {
       `|---|-------|--------|--------|------|-------------|`,
     ];
 
-    MODEL_REGISTRY.forEach((m, i) => {
-      const isActive = m.id === this.activeModelId ? ' ✅' : '';
+    MODEL_REGISTRY.forEach((m) => {
+      const isActive = m.id === this.activeModelId ? ' (active)' : '';
       const position = chain.indexOf(m.id) + 1;
       const failCount = this.failoverAttempts.get(m.id);
-      const failInfo = failCount ? ` ⚠️ (failed ${failCount}x)` : '';
+      const failInfo = failCount ? ` (failed ${failCount}x)` : '';
       lines.push(
         `| ${position} | **${m.name}**${isActive} | \`${m.id}\` | ${m.status} | ${m.tier} | ${m.description}${failInfo} |`
       );
     });
 
     lines.push('');
-    lines.push(`💡 **Switch model**: \`/model <api-id>\` (e.g. \`/model gemini-3-flash-preview\`)`);
-    lines.push(`💡 **Set default**: Add \`GEMINI_MODEL=<api-id>\` to your \`.env\` file`);
+    lines.push(`Switch model: \`/model <api-id>\``);
+    lines.push(`Set default: Add \`GEMINI_MODEL=<api-id>\` to your \`.env\` file`);
 
     return lines.join('\n');
   }
 
   private handleSwitchModel(modelId: string): string {
-    // Check if it's in registry
     const registryModel = MODEL_REGISTRY.find(m => m.id === modelId);
-
-    // Allow custom model IDs too
     this.activeModelId = modelId;
     this.model = this.createModel(modelId);
     this.chat = this.model.startChat({ history: this.history });
 
     const name = registryModel ? registryModel.name : modelId;
-    const warning = registryModel ? '' : '\n⚠️ This model is not in the registry — failover won\'t apply to it.';
+    const warning = registryModel ? '' : '\nThis model is not in the registry — failover won\'t apply to it.';
 
-    return `🔄 Switched to **${name}** (\`${modelId}\`)${warning}\n\nSession preserved. No context lost.`;
+    return `Switched to **${name}** (\`${modelId}\`)${warning}\n\nSession preserved. No context lost.`;
   }
 
   private handleMemory(): string {
     try {
       if (!fs.existsSync(KNOWLEDGE_FILE)) {
-        return '🧠 **Long-term memory is empty.** I haven\'t learned anything yet. Talk to me!';
+        return '**Long-term memory is empty.** I haven\'t learned anything yet. Talk to me!';
       }
 
       const raw = JSON.parse(fs.readFileSync(KNOWLEDGE_FILE, 'utf8'));
       const entries = Object.entries(raw);
 
       if (entries.length === 0) {
-        return '🧠 **Long-term memory is empty.** No knowledge stored yet.';
+        return '**Long-term memory is empty.** No knowledge stored yet.';
       }
 
       const lines = [
-        `## 🧠 Long-Term Memory (${entries.length} entries)`,
+        `## Long-Term Memory (${entries.length} entries)`,
         ``,
         `| Key | Value |`,
         `|-----|-------|`,
@@ -651,55 +723,50 @@ export class Brain {
 
       entries.forEach(([k, v]) => {
         const val = typeof v === 'string' ? v : JSON.stringify(v);
-        // Truncate long values for display
         const display = val.length > 100 ? val.substring(0, 100) + '...' : val;
         lines.push(`| \`${k}\` | ${display} |`);
       });
 
       lines.push('');
-      lines.push(`💡 **Forget**: \`/forget <key>\` to remove an entry`);
+      lines.push(`Forget: \`/forget <key>\``);
 
       return lines.join('\n');
     } catch (e: any) {
-      return `🧠 Error reading memory: ${e.message}`;
+      return `Error reading memory: ${e.message}`;
     }
   }
 
   private handleForget(key: string): string {
     try {
-      if (!key) return '❌ Usage: `/forget <key>` — specify which memory key to remove.';
-
-      if (!fs.existsSync(KNOWLEDGE_FILE)) {
-        return `❌ No memory file found. Nothing to forget.`;
-      }
+      if (!key) return 'Usage: `/forget <key>` — specify which memory key to remove.';
+      if (!fs.existsSync(KNOWLEDGE_FILE)) return `No memory file found. Nothing to forget.`;
 
       const raw = JSON.parse(fs.readFileSync(KNOWLEDGE_FILE, 'utf8'));
 
       if (!(key in raw)) {
         const available = Object.keys(raw).map(k => `\`${k}\``).join(', ');
-        return `❌ Key \`${key}\` not found. Available keys: ${available || 'none'}`;
+        return `Key \`${key}\` not found. Available keys: ${available || 'none'}`;
       }
 
       const oldValue = raw[key];
       delete raw[key];
       fs.writeFileSync(KNOWLEDGE_FILE, JSON.stringify(raw, null, 2));
 
-      return `🗑️ Forgotten: \`${key}\`\n> Was: ${typeof oldValue === 'string' ? oldValue : JSON.stringify(oldValue)}`;
+      return `Forgotten: \`${key}\`\n> Was: ${typeof oldValue === 'string' ? oldValue : JSON.stringify(oldValue)}`;
     } catch (e: any) {
-      return `❌ Error: ${e.message}`;
+      return `Error: ${e.message}`;
     }
   }
 
   private handleSkills(): string {
     const lines = [
-      `## 🔧 Loaded Skills (${skills.length})`,
+      `## Loaded Skills (${skills.length})`,
       ``,
       `| # | Skill Name | Description |`,
       `|---|-----------|-------------|`,
     ];
 
     skills.forEach((skill, i) => {
-      // Truncate description to first sentence
       const desc = skill.description.split('\n')[0].substring(0, 80);
       lines.push(`| ${i + 1} | \`${skill.name}\` | ${desc} |`);
     });
@@ -711,17 +778,17 @@ export class Brain {
     try {
       const jobsFile = path.join(MEMORY_DIR, 'scheduled_jobs.json');
       if (!fs.existsSync(jobsFile)) {
-        return '⏰ **No scheduled jobs.** Use the scheduler skill to create one.';
+        return '**No scheduled jobs.** Use the scheduler skill to create one.';
       }
 
       const jobs = JSON.parse(fs.readFileSync(jobsFile, 'utf8'));
 
       if (!jobs.length) {
-        return '⏰ **No scheduled jobs.** Use the scheduler skill to create one.';
+        return '**No scheduled jobs.**';
       }
 
       const lines = [
-        `## ⏰ Scheduled Jobs (${jobs.length})`,
+        `## Scheduled Jobs (${jobs.length})`,
         ``,
         `| ID | Schedule | Command |`,
         `|----|----------|---------|`,
@@ -733,7 +800,7 @@ export class Brain {
 
       return lines.join('\n');
     } catch (e: any) {
-      return `⏰ Error reading jobs: ${e.message}`;
+      return `Error reading jobs: ${e.message}`;
     }
   }
 
@@ -761,10 +828,147 @@ export class Brain {
 
       fs.writeFileSync(filePath, JSON.stringify(exportData, null, 2));
 
-      return `📦 Session exported to:\n\`${filePath}\`\n\n- **Turns**: ${this.turnCount}\n- **Tokens**: ${tokenResult.totalTokens.toLocaleString()}\n- **Size**: ${(fs.statSync(filePath).size / 1024).toFixed(1)} KB`;
+      return `Session exported to:\n\`${filePath}\`\n\n- **Turns**: ${this.turnCount}\n- **Tokens**: ${tokenResult.totalTokens.toLocaleString()}\n- **Size**: ${(fs.statSync(filePath).size / 1024).toFixed(1)} KB`;
     } catch (e: any) {
-      return `❌ Export failed: ${e.message}`;
+      return `Export failed: ${e.message}`;
     }
+  }
+
+  private handlePerf(): string {
+    const stats = this.perf.getStats();
+
+    if (stats.totalRequests === 0) {
+      return `## Performance\n\nNo requests recorded yet. Start chatting to see performance data!`;
+    }
+
+    const lines = [
+      `## Performance Statistics`,
+      ``,
+      `| Metric | Value |`,
+      `|--------|-------|`,
+      `| **Total Requests** | ${stats.totalRequests} |`,
+      `| **Avg Response Time** | ${stats.avgResponseMs}ms |`,
+      `| **P50 Latency** | ${stats.p50Ms}ms |`,
+      `| **P95 Latency** | ${stats.p95Ms}ms |`,
+      `| **Total Tool Calls** | ${stats.totalToolCalls} |`,
+      `| **Avg Tools/Request** | ${stats.avgToolCalls} |`,
+      ``,
+      `### Model Usage`,
+      `| Model | Requests |`,
+      `|-------|----------|`,
+    ];
+
+    for (const [model, count] of Object.entries(stats.modelUsage)) {
+      const info = MODEL_REGISTRY.find(m => m.id === model);
+      lines.push(`| ${info?.name || model} | ${count} |`);
+    }
+
+    // Recent response times
+    const recent = this.perf.getRecentRecords(10);
+    if (recent.length > 0) {
+      lines.push('');
+      lines.push('### Recent Requests');
+      lines.push('| Time | Duration | Tools |');
+      lines.push('|------|----------|-------|');
+      for (const r of recent.reverse()) {
+        const time = new Date(r.timestamp).toLocaleTimeString();
+        lines.push(`| ${time} | ${r.durationMs}ms | ${r.toolCalls} |`);
+      }
+    }
+
+    return lines.join('\n');
+  }
+
+  private handleSessions(): string {
+    const sessions = SessionManager.listSessions(15);
+
+    if (sessions.length === 0) {
+      return `## Sessions\n\nNo saved sessions found.`;
+    }
+
+    const stats = SessionManager.getStats();
+    const lines = [
+      `## Session History (${stats.totalSessions} total, ${stats.totalSizeKB} KB)`,
+      ``,
+      `| Session ID | Date | Turns | Size | Preview |`,
+      `|-----------|------|-------|------|---------|`,
+    ];
+
+    for (const s of sessions) {
+      const date = s.createdAt.toLocaleDateString();
+      const preview = s.firstMessage ? s.firstMessage.substring(0, 40) + (s.firstMessage.length > 40 ? '...' : '') : '-';
+      const isCurrent = s.id === this.sessionId ? ' **(current)**' : '';
+      lines.push(`| \`${s.id}\`${isCurrent} | ${date} | ${s.turnCount} | ${s.sizeKB}KB | ${preview} |`);
+    }
+
+    lines.push('');
+    lines.push('Restore: `/restore <session_id>`');
+    lines.push('Search: `/search <query>`');
+
+    return lines.join('\n');
+  }
+
+  private handleSearch(query: string): string {
+    if (!query) return 'Usage: `/search <query>` — search through past conversations.';
+
+    const results = SessionManager.searchSessions(query, 10);
+
+    if (results.length === 0) {
+      return `No sessions found matching "${query}".`;
+    }
+
+    const lines = [
+      `## Search Results for "${query}" (${results.length} sessions)`,
+      ``,
+    ];
+
+    for (const { session, matches } of results) {
+      const date = session.createdAt.toLocaleDateString();
+      lines.push(`### \`${session.id}\` (${date}, ${session.turnCount} turns)`);
+      for (const match of matches) {
+        lines.push(`> ${match}`);
+      }
+      lines.push('');
+    }
+
+    lines.push('Restore: `/restore <session_id>`');
+
+    return lines.join('\n');
+  }
+
+  private handleAudit(): string {
+    const entries = audit.getRecent(20);
+
+    if (entries.length === 0) {
+      return `## Audit Log\n\nNo audit entries recorded yet.`;
+    }
+
+    const stats = audit.getStats();
+    const lines = [
+      `## Audit Log (${stats.total} total entries)`,
+      ``,
+      `### Summary`,
+      `| Level | Count |`,
+      `|-------|-------|`,
+    ];
+
+    for (const [level, count] of Object.entries(stats.byLevel)) {
+      lines.push(`| ${level} | ${count} |`);
+    }
+
+    lines.push('');
+    lines.push('### Recent Entries');
+    lines.push('| Time | Level | Category | Detail |');
+    lines.push('|------|-------|----------|--------|');
+
+    for (const entry of entries.slice(-15).reverse()) {
+      const time = new Date(entry.timestamp).toLocaleTimeString();
+      const detail = entry.detail.substring(0, 60) + (entry.detail.length > 60 ? '...' : '');
+      const duration = entry.durationMs ? ` (${entry.durationMs}ms)` : '';
+      lines.push(`| ${time} | ${entry.level} | ${entry.category} | ${detail}${duration} |`);
+    }
+
+    return lines.join('\n');
   }
 
   // ─── Main Message Processor ────────────────────────────────────────
@@ -772,6 +976,11 @@ export class Brain {
   async processMessage(message: string, onUpdate?: (chunk: string) => void): Promise<string> {
     const msgTrimmed = message.trim();
     const msgLower = msgTrimmed.toLowerCase();
+
+    eventBus.dispatch(Events.MESSAGE_RECEIVED, {
+      text: msgTrimmed.substring(0, 200),
+      source: 'user',
+    }, 'brain');
 
     // ── Slash Commands (handled locally, no model call) ──
 
@@ -783,13 +992,21 @@ export class Brain {
     if (msgLower === '/skills') return this.handleSkills();
     if (msgLower === '/jobs') return await this.handleJobs();
     if (msgLower === '/export') return await this.handleExport();
-    if (msgLower === '/ping') return `🏓 **Pong!** Brain is alive.\n- Model: \`${this.activeModelId}\`\n- Uptime: ${Math.floor((Date.now() - this.sessionStartTime) / 60000)}m\n- Turns: ${this.turnCount}`;
+    if (msgLower === '/perf') return this.handlePerf();
+    if (msgLower === '/audit') return this.handleAudit();
+    if (msgLower === '/sessions') return this.handleSessions();
+
+    if (msgLower === '/ping') {
+      const uptimeMs = Date.now() - this.sessionStartTime;
+      const uptimeMin = Math.floor(uptimeMs / 60000);
+      return `**Pong!** Brain is alive.\n- Model: \`${this.activeModelId}\`\n- Uptime: ${uptimeMin}m\n- Turns: ${this.turnCount}\n- Tool Calls: ${this.totalToolCalls}`;
+    }
 
     if (msgLower === '/compact') {
       const didCompact = await this.compactHistoryIfNeeded();
       return didCompact
-        ? '🗜️ Context compacted successfully. Token usage reduced.'
-        : '🗜️ No compaction needed — token usage is within limits.';
+        ? 'Context compacted successfully. Token usage reduced.'
+        : 'No compaction needed — token usage is within limits.';
     }
 
     if (msgLower.startsWith('/model ')) {
@@ -802,29 +1019,47 @@ export class Brain {
       return this.handleForget(key);
     }
 
-    // /screenshot — quick action, delegate to tools directly
+    if (msgLower.startsWith('/restore ')) {
+      const sessionId = msgTrimmed.substring(9).trim();
+      return await this.restoreSession(sessionId);
+    }
+
+    if (msgLower.startsWith('/search ')) {
+      const query = msgTrimmed.substring(8).trim();
+      return this.handleSearch(query);
+    }
+
+    // Quick action commands
     if (msgLower === '/screenshot') {
       return await this.processMessage('Take a screenshot of my screen and tell me what you see.');
     }
-
-    // /sysinfo — quick action
     if (msgLower === '/sysinfo') {
-      return await this.processMessage('Give me a quick system info snapshot: CPU, RAM, disk usage, OS version, IP address. Use PowerShell. Be concise.');
+      return await this.processMessage('Give me a quick system info snapshot: CPU, RAM, disk usage, OS version, IP address. Use the system_info tool with action "overview". Be concise.');
+    }
+    if (msgLower === '/ip') {
+      return await this.processMessage('Show my network interfaces and IP addresses. Use the network_diagnostics tool with action "interfaces". Be concise.');
+    }
+    if (msgLower === '/procs') {
+      return await this.processMessage('Show top resource-consuming processes. Use the manage_processes tool with action "resource_hogs". Be concise.');
     }
 
-    // /learned — self-learning status
+    // Self-learning commands
     if (msgLower === '/learned') return Learner.getLearningSummary();
     if (msgLower === '/learned log') return Learner.getLearningLog();
     if (msgLower === '/learned clear') return Learner.clearLearnings();
 
-    // Catch unknown slash commands
+    // Unknown slash commands
     if (msgLower.startsWith('/') && !msgLower.startsWith('/new') && !msgLower.includes(' ')) {
-      const known = ['/new', '/help', '/status', '/models', '/model', '/memory', '/forget', '/skills', '/jobs', '/compact', '/ping', '/export', '/screenshot', '/sysinfo', '/learned'];
-      return `❓ Unknown command: \`${msgTrimmed}\`\n\nAvailable commands:\n${known.map(c => `\`${c}\``).join(' ')}`;
+      const known = ['/new', '/help', '/status', '/models', '/model', '/memory', '/forget', '/skills', '/jobs',
+        '/compact', '/ping', '/export', '/screenshot', '/sysinfo', '/learned', '/perf', '/audit', '/sessions',
+        '/restore', '/search', '/ip', '/procs'];
+      return `Unknown command: \`${msgTrimmed}\`\n\nAvailable commands:\n${known.map(c => `\`${c}\``).join(' ')}`;
     }
 
     // ── Main Processing Loop ──
     this.turnCount++;
+    const requestStartTime = Date.now();
+    let toolCallsThisRequest = 0;
 
     // Auto-compact check every 20 turns
     if (this.turnCount % 20 === 0) {
@@ -838,7 +1073,7 @@ export class Brain {
     if (this.activeModelId !== this.failoverChain[0] && this.turnCount === 1) {
       if (onUpdate) {
         const info = MODEL_REGISTRY.find(m => m.id === this.activeModelId);
-        onUpdate(`⚠️ Primary model unavailable. Using **${info?.name || this.activeModelId}** (failover).`);
+        onUpdate(`Primary model unavailable. Using **${info?.name || this.activeModelId}** (failover).`);
       }
     }
 
@@ -848,7 +1083,7 @@ export class Brain {
     // ── Tool-Calling Loop ──
     while (response.candidates?.[0]?.content?.parts?.some((part: any) => part.functionCall)) {
       if (toolTurns >= MAX_TOOL_TURNS) {
-        const bailMessage = `⚠️ Reached the tool call limit (${MAX_TOOL_TURNS} rounds). Here's where I am — you may need to break this into smaller steps.`;
+        const bailMessage = `Reached the tool call limit (${MAX_TOOL_TURNS} rounds). Here's where I am — you may need to break this into smaller steps.`;
         if (onUpdate) onUpdate(bailMessage);
         return bailMessage;
       }
@@ -858,19 +1093,24 @@ export class Brain {
       const toolCalls = allParts.filter((part: any) => part.functionCall);
       const toolResults: any[] = [];
 
-      // Process all tool calls from this turn in parallel
       const callPromises = toolCalls.map(async (call: any) => {
         const { name, args } = call.functionCall;
         const startTime = Date.now();
-        console.log(`[Brain] ⚡ Tool: ${name}`, JSON.stringify(args).substring(0, 200));
+        console.log(`[Brain] Tool: ${name}`, JSON.stringify(args).substring(0, 200));
+
+        eventBus.dispatch(Events.TOOL_CALLED, { name, args }, 'brain');
 
         try {
           const output = await handleToolCall(name, args);
           const elapsed = Date.now() - startTime;
-          console.log(`[Brain] ✅ ${name} completed in ${elapsed}ms`);
+          console.log(`[Brain] ${name} completed in ${elapsed}ms`);
+          toolCallsThisRequest++;
+          this.totalToolCalls++;
+
+          eventBus.dispatch(Events.TOOL_COMPLETED, { name, durationMs: elapsed }, 'brain');
 
           if (onUpdate) {
-            onUpdate(`🔧 \`${name}\` ✓ (${elapsed}ms)`);
+            onUpdate(`\`${name}\` completed (${elapsed}ms)`);
           }
 
           return {
@@ -878,10 +1118,14 @@ export class Brain {
           };
         } catch (e: any) {
           const elapsed = Date.now() - startTime;
-          console.error(`[Brain] ❌ ${name} failed in ${elapsed}ms:`, e.message);
+          console.error(`[Brain] ${name} failed in ${elapsed}ms:`, e.message);
+          toolCallsThisRequest++;
+          this.totalToolCalls++;
+
+          eventBus.dispatch(Events.TOOL_FAILED, { name, error: e.message, durationMs: elapsed }, 'brain');
 
           if (onUpdate) {
-            onUpdate(`🔧 \`${name}\` ✗ Error: ${e.message}`);
+            onUpdate(`\`${name}\` failed: ${e.message}`);
           }
 
           return {
@@ -901,7 +1145,6 @@ export class Brain {
       const results = await Promise.all(callPromises);
       toolResults.push(...results);
 
-      // Send tool results back with failover
       result = await this.sendWithFailover(toolResults);
       response = result.response;
     }
@@ -917,8 +1160,22 @@ export class Brain {
     this.history = await this.chat.getHistory();
     this.saveHistory();
 
+    // Track performance
+    const requestDuration = Date.now() - requestStartTime;
+    this.perf.record({
+      timestamp: requestStartTime,
+      durationMs: requestDuration,
+      toolCalls: toolCallsThisRequest,
+      model: this.activeModelId,
+    });
+
+    eventBus.dispatch(Events.MESSAGE_PROCESSED, {
+      durationMs: requestDuration,
+      toolCalls: toolCallsThisRequest,
+      model: this.activeModelId,
+    }, 'brain');
+
     // Queue conversation for background self-learning analysis
-    // Only for real user conversations, not internal scheduler messages
     if (!message.startsWith('[INTERNAL_SCHEDULER]') && !message.startsWith('[DASHBOARD_IMAGE_UPLOAD]')) {
       this.learner.queueAnalysis(this.history);
     }

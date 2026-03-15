@@ -16,9 +16,19 @@ import {
   Cpu,
   Database,
   Copy,
-  Check
+  Check,
+  Zap,
+  Search,
+  X,
+  History,
+  Terminal,
+  Wifi,
+  WifiOff,
+  ChevronRight,
+  Settings,
+  Sparkles,
+  ArrowUp,
 } from 'lucide-react';
-
 
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
@@ -30,53 +40,117 @@ interface Message {
   sender: 'user' | 'bot';
   timestamp: Date;
   image?: string;
+  toolUpdates?: string[];
+  metadata?: { model?: string; turns?: number; toolCalls?: number };
 }
 
-type TabType = 'command' | 'metrics' | 'files' | 'security';
+interface ActivityItem {
+  id: string;
+  type: string;
+  timestamp: number;
+  source: string;
+  summary: string;
+}
+
+interface SkillInfo {
+  name: string;
+  description: string;
+}
+
+type TabType = 'command' | 'metrics' | 'activity' | 'skills';
 
 const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([
-    { id: '1', text: 'Welcome back, System Admin. PersonalClaw is active and monitoring.', sender: 'bot', timestamp: new Date() }
+    { id: '1', text: 'Welcome back. PersonalClaw v10 is online and ready.', sender: 'bot', timestamp: new Date() }
   ]);
 
   const [socket, setSocket] = useState<Socket | null>(null);
-  const [metrics, setMetrics] = useState({ cpu: 0, ram: '0', totalRam: '0' });
+  const [connected, setConnected] = useState(false);
+  const [metrics, setMetrics] = useState({ cpu: 0, ram: '0', totalRam: '0', disk: '0', totalDisk: '0' });
   const [isLightTheme, setIsLightTheme] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isBotTyping, setIsBotTyping] = useState(false);
   const [pendingScreenshot, setPendingScreenshot] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('command');
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [commandSearch, setCommandSearch] = useState('');
+  const [activityFeed, setActivityFeed] = useState<ActivityItem[]>([]);
+  const [toolUpdates, setToolUpdates] = useState<string[]>([]);
+  const [serverInfo, setServerInfo] = useState<any>(null);
+  const [loadedSkills, setLoadedSkills] = useState<SkillInfo[]>([]);
+  const [cpuHistory, setCpuHistory] = useState<number[]>([]);
+  const [ramHistory, setRamHistory] = useState<number[]>([]);
+  const [toasts, setToasts] = useState<{ id: string; text: string; type: 'info' | 'success' | 'error' }[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const commandPaletteRef = useRef<HTMLInputElement>(null);
 
+  // ── Toast notifications ──
+  const addToast = useCallback((text: string, type: 'info' | 'success' | 'error' = 'info') => {
+    const id = Date.now().toString();
+    setToasts(prev => [...prev, { id, text, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
+  }, []);
+
+  // ── Socket.io connection ──
   useEffect(() => {
     const newSocket = io('http://localhost:3000');
     setSocket(newSocket);
 
-    newSocket.on('metrics', (data: { cpu: number, ram: string, totalRam: string }) => {
-      setMetrics(data);
+    newSocket.on('connect', () => {
+      setConnected(true);
+      addToast('Connected to PersonalClaw', 'success');
     });
 
-    newSocket.on('response', (data: { text: string }) => {
+    newSocket.on('disconnect', () => {
+      setConnected(false);
+      addToast('Disconnected from server', 'error');
+    });
+
+    newSocket.on('init', (data: any) => {
+      setServerInfo(data);
+      if (data.skills) setLoadedSkills(data.skills);
+      if (data.activity) setActivityFeed(data.activity);
+    });
+
+    newSocket.on('metrics', (data: any) => {
+      setMetrics(data);
+      setCpuHistory(prev => [...prev.slice(-29), data.cpu]);
+      setRamHistory(prev => [...prev.slice(-29), parseFloat(data.ram)]);
+    });
+
+    newSocket.on('response', (data: { text: string; metadata?: any }) => {
       setIsBotTyping(false);
+      setToolUpdates([]);
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         text: data.text,
         sender: 'bot',
-        timestamp: new Date()
+        timestamp: new Date(),
+        metadata: data.metadata,
       }]);
+    });
+
+    newSocket.on('tool_update', (data: { text: string }) => {
+      setToolUpdates(prev => [...prev, data.text]);
+    });
+
+    newSocket.on('activity', (item: ActivityItem) => {
+      setActivityFeed(prev => [...prev.slice(-49), item]);
     });
 
     return () => {
       newSocket.close();
     };
-  }, []);
+  }, [addToast]);
 
+  // ── Auto-scroll ──
   useEffect(() => {
     if (activeTab === 'command') {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, isBotTyping, activeTab]);
 
+  // ── Theme ──
   useEffect(() => {
     if (isLightTheme) {
       document.body.classList.add('light-theme');
@@ -85,6 +159,29 @@ const App: React.FC = () => {
     }
   }, [isLightTheme]);
 
+  // ── Keyboard shortcuts ──
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowCommandPalette(prev => !prev);
+        setCommandSearch('');
+      }
+      if (e.key === 'Escape') {
+        setShowCommandPalette(false);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  useEffect(() => {
+    if (showCommandPalette) {
+      setTimeout(() => commandPaletteRef.current?.focus(), 50);
+    }
+  }, [showCommandPalette]);
+
+  // ── Send message ──
   const handleSendMessage = useCallback((text: string) => {
     if ((!text.trim() && !pendingScreenshot) || !socket) return;
 
@@ -98,47 +195,38 @@ const App: React.FC = () => {
 
     setMessages(prev => [...prev, newMessage]);
     setIsBotTyping(true);
-    
-    socket.emit('message', { 
-      text: text || 'Analyze this image.', 
-      image: pendingScreenshot 
+    setToolUpdates([]);
+
+    socket.emit('message', {
+      text: text || 'Analyze this image.',
+      image: pendingScreenshot
     });
 
     setPendingScreenshot(null);
   }, [pendingScreenshot, socket]);
 
-
+  // ── Screenshot capture ──
   const handleScreenshot = async () => {
     if (!socket) return;
     setIsCapturing(true);
-
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: { cursor: "always" } as any,
         audio: false
       });
-
       const video = document.createElement('video');
       video.srcObject = stream;
-      
       await new Promise((resolve) => {
-        video.onloadedmetadata = () => {
-          video.play();
-          resolve(true);
-        };
+        video.onloadedmetadata = () => { video.play(); resolve(true); };
       });
-
       await new Promise(r => setTimeout(r, 500));
-
       const canvas = document.createElement('canvas');
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d');
       ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
-
       const imageData = canvas.toDataURL('image/png');
       stream.getTracks().forEach(track => track.stop());
-
       setPendingScreenshot(imageData);
     } catch (err) {
       console.error('Screenshot failed:', err);
@@ -148,78 +236,154 @@ const App: React.FC = () => {
   };
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
-
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  // ── Command palette commands ──
+  const commands = [
+    { label: 'New Session', cmd: '/new', icon: '🔄' },
+    { label: 'System Status', cmd: '/status', icon: '📊' },
+    { label: 'Performance Stats', cmd: '/perf', icon: '⚡' },
+    { label: 'Audit Log', cmd: '/audit', icon: '📋' },
+    { label: 'Browse Sessions', cmd: '/sessions', icon: '📁' },
+    { label: 'List Skills', cmd: '/skills', icon: '🔧' },
+    { label: 'List Models', cmd: '/models', icon: '🤖' },
+    { label: 'Memory', cmd: '/memory', icon: '🧠' },
+    { label: 'Screenshot', cmd: '/screenshot', icon: '📸' },
+    { label: 'System Info', cmd: '/sysinfo', icon: '💻' },
+    { label: 'Network Info', cmd: '/ip', icon: '🌐' },
+    { label: 'Top Processes', cmd: '/procs', icon: '📈' },
+    { label: 'Scheduled Jobs', cmd: '/jobs', icon: '⏰' },
+    { label: 'Self-Learning', cmd: '/learned', icon: '🧬' },
+    { label: 'Compact Context', cmd: '/compact', icon: '🗜️' },
+    { label: 'Export Session', cmd: '/export', icon: '📦' },
+    { label: 'Help', cmd: '/help', icon: '❓' },
+  ];
+
+  const filteredCommands = commands.filter(c =>
+    c.label.toLowerCase().includes(commandSearch.toLowerCase()) ||
+    c.cmd.toLowerCase().includes(commandSearch.toLowerCase())
+  );
+
+  const executeCommand = (cmd: string) => {
+    setShowCommandPalette(false);
+    handleSendMessage(cmd);
+  };
+
+  // ── Mini sparkline renderer ──
+  const Sparkline = ({ data, color, height = 40 }: { data: number[]; color: string; height?: number }) => {
+    if (data.length < 2) return null;
+    const max = Math.max(...data, 1);
+    const w = 200;
+    const points = data.map((v, i) => `${(i / (data.length - 1)) * w},${height - (v / max) * height}`).join(' ');
+    return (
+      <svg width={w} height={height} style={{ opacity: 0.8 }}>
+        <polyline fill="none" stroke={color} strokeWidth="2" points={points} />
+      </svg>
+    );
+  };
+
+  const formatTime = (ts: number) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
   return (
     <div className="dashboard-container">
+      {/* ── Sidebar ── */}
       <aside className="sidebar">
-        <h1>PersonalClaw</h1>
+        <div className="sidebar-brand">
+          <Sparkles size={22} style={{ color: 'var(--accent-primary)' }} />
+          <h1>PersonalClaw</h1>
+        </div>
+        <div className="version-badge">v10.0</div>
+
         <nav style={{ flex: 1 }}>
           <ul style={{ listStyle: 'none' }}>
             <li className={`nav-item ${activeTab === 'command' ? 'active' : ''}`} onClick={() => setActiveTab('command')}>
-              <LayoutDashboard size={20} />
+              <Terminal size={18} />
               <span>Command Center</span>
             </li>
             <li className={`nav-item ${activeTab === 'metrics' ? 'active' : ''}`} onClick={() => setActiveTab('metrics')}>
-              <Activity size={20} />
+              <Activity size={18} />
               <span>System Metrics</span>
             </li>
-            <li className={`nav-item ${activeTab === 'files' ? 'active' : ''}`} onClick={() => setActiveTab('files')}>
-              <FileCode size={20} />
-              <span>File Explorer</span>
+            <li className={`nav-item ${activeTab === 'activity' ? 'active' : ''}`} onClick={() => setActiveTab('activity')}>
+              <Zap size={18} />
+              <span>Activity Feed</span>
+              {activityFeed.length > 0 && (
+                <span className="badge">{activityFeed.length}</span>
+              )}
             </li>
-            <li className={`nav-item ${activeTab === 'security' ? 'active' : ''}`} onClick={() => setActiveTab('security')}>
-              <Shield size={20} />
-              <span>Security Logs</span>
+            <li className={`nav-item ${activeTab === 'skills' ? 'active' : ''}`} onClick={() => setActiveTab('skills')}>
+              <Settings size={18} />
+              <span>Skills & Config</span>
             </li>
           </ul>
         </nav>
 
-        <div style={{ marginTop: 'auto', display: 'flex', gap: '10px', alignItems: 'center' }}>
+        {/* Quick actions */}
+        <div className="quick-actions">
+          <button className="quick-btn" onClick={() => setShowCommandPalette(true)} title="Command Palette (Ctrl+K)">
+            <Search size={16} />
+            <span>Commands</span>
+            <kbd>Ctrl+K</kbd>
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: '12px' }}>
           <button
             className="theme-toggle"
             onClick={() => setIsLightTheme(!isLightTheme)}
             title="Toggle Light/Dark Mode"
           >
-            {isLightTheme ? <Moon size={20} /> : <Sun size={20} />}
+            {isLightTheme ? <Moon size={18} /> : <Sun size={18} />}
           </button>
           <div className="agent-status">
-            <div className="dot green" />
-            <div style={{ fontSize: '0.8rem' }}>
-              <div style={{ color: 'var(--text-dim)' }}>Agent Status</div>
-              <div style={{ fontWeight: 600 }}>Online</div>
+            <div className={`dot ${connected ? 'green' : 'red'}`} />
+            <div style={{ fontSize: '0.75rem' }}>
+              <div style={{ color: 'var(--text-dim)' }}>Agent</div>
+              <div style={{ fontWeight: 600 }}>{connected ? 'Online' : 'Offline'}</div>
             </div>
           </div>
         </div>
       </aside>
 
+      {/* ── Main Content ── */}
       <main className="main-content">
+        {/* Status bar */}
         <div className="status-grid">
           <div className="stat-card">
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>CPU LOAD</div>
-            <div style={{ fontSize: '1.2rem', fontWeight: 700 }}>{metrics.cpu}%</div>
-            <div style={{ height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', marginTop: '8px' }}>
-              <div style={{ width: `${metrics.cpu}%`, height: '100%', background: 'var(--accent-primary)', borderRadius: '2px', transition: 'width 0.5s' }} />
+            <div className="stat-label"><Cpu size={14} /> CPU</div>
+            <div className="stat-value">{metrics.cpu}%</div>
+            <div className="stat-bar">
+              <div className="stat-bar-fill" style={{ width: `${metrics.cpu}%`, background: metrics.cpu > 80 ? '#ef4444' : 'var(--accent-primary)' }} />
             </div>
           </div>
           <div className="stat-card">
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>RAM USAGE</div>
-            <div style={{ fontSize: '1.2rem', fontWeight: 700 }}>{metrics.ram} GB / {metrics.totalRam} GB</div>
+            <div className="stat-label"><Database size={14} /> RAM</div>
+            <div className="stat-value">{metrics.ram} / {metrics.totalRam} GB</div>
+            <div className="stat-bar">
+              <div className="stat-bar-fill" style={{ width: `${(parseFloat(metrics.ram) / parseFloat(metrics.totalRam)) * 100}%` }} />
+            </div>
           </div>
           <div className="stat-card">
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>TASKS COMPLETED</div>
-            <div style={{ fontSize: '1.2rem', fontWeight: 700 }}>{messages.filter(m => m.sender === 'bot').length}</div>
+            <div className="stat-label"><HardDrive size={14} /> Disk</div>
+            <div className="stat-value">{metrics.disk} / {metrics.totalDisk} GB</div>
+            <div className="stat-bar">
+              <div className="stat-bar-fill" style={{ width: `${parseFloat(metrics.totalDisk) > 0 ? (parseFloat(metrics.disk) / parseFloat(metrics.totalDisk)) * 100 : 0}%` }} />
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label"><Zap size={14} /> Session</div>
+            <div className="stat-value">{messages.filter(m => m.sender === 'user').length} turns</div>
           </div>
         </div>
 
+        {/* Tab Content */}
         <div className="content-area" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <AnimatePresence mode="wait">
+            {/* ── Command Center ── */}
             {activeTab === 'command' && (
               <motion.div
                 key="chat"
@@ -233,7 +397,11 @@ const App: React.FC = () => {
                   <div className="dot red" />
                   <div className="dot yellow" />
                   <div className="dot green" />
-                  <span style={{ marginLeft: '12px', fontSize: '0.8rem', opacity: 0.6, fontFamily: 'monospace' }}>personal-claw-v1.10.0 --active</span>
+                  <span className="terminal-title">personalclaw-v10.0 --active</span>
+                  <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    {connected ? <Wifi size={14} style={{ color: '#27c93f' }} /> : <WifiOff size={14} style={{ color: '#ff5f56' }} />}
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>{serverInfo?.model || 'loading...'}</span>
+                  </div>
                 </div>
 
                 <div className="messages-container">
@@ -241,28 +409,28 @@ const App: React.FC = () => {
                     {messages.map((msg) => (
                       <motion.div
                         key={msg.id}
-                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        initial={{ opacity: 0, y: 10, scale: 0.98 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         className={`message ${msg.sender}`}
                       >
                         <div style={{ display: 'flex', gap: '12px' }}>
-                          <div style={{ marginTop: '4px' }}>
-                            {msg.sender === 'bot' ? <Bot size={18} /> : <User size={18} />}
+                          <div className="message-avatar">
+                            {msg.sender === 'bot' ? <Bot size={16} /> : <User size={16} />}
                           </div>
                           <div className="message-text">
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>
                               {msg.text}
                             </ReactMarkdown>
                             {msg.image && (
-                              <img 
-                                src={msg.image} 
-                                alt="Uploaded content" 
-                                style={{ maxWidth: '100%', borderRadius: '8px', marginTop: '10px', border: '1px solid var(--border)' }} 
+                              <img
+                                src={msg.image}
+                                alt="Uploaded content"
+                                style={{ maxWidth: '100%', borderRadius: '8px', marginTop: '10px', border: '1px solid var(--border)' }}
                               />
                             )}
                             {msg.sender === 'bot' && (
-                              <button 
-                                className="copy-btn" 
+                              <button
+                                className="copy-btn"
                                 onClick={() => handleCopy(msg.text, msg.id)}
                                 title="Copy to clipboard"
                               >
@@ -270,23 +438,37 @@ const App: React.FC = () => {
                               </button>
                             )}
                           </div>
-
                         </div>
                       </motion.div>
                     ))}
+
+                    {/* Typing indicator with tool updates */}
                     {isBotTyping && (
                       <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="message bot"
-                        style={{ background: 'transparent', border: 'none', padding: '0 20px' }}
+                        className="message bot typing-message"
                       >
-                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                          <Bot size={18} />
-                          <div className="typing-indicator">
-                            <div className="typing-dot" />
-                            <div className="typing-dot" />
-                            <div className="typing-dot" />
+                        <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                          <div className="message-avatar">
+                            <Bot size={16} />
+                          </div>
+                          <div>
+                            {toolUpdates.length > 0 && (
+                              <div className="tool-updates">
+                                {toolUpdates.map((update, i) => (
+                                  <div key={i} className="tool-update-item">
+                                    <ChevronRight size={12} />
+                                    <span>{update}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            <div className="typing-indicator">
+                              <div className="typing-dot" />
+                              <div className="typing-dot" />
+                              <div className="typing-dot" />
+                            </div>
                           </div>
                         </div>
                       </motion.div>
@@ -295,100 +477,144 @@ const App: React.FC = () => {
                   <div ref={messagesEndRef} />
                 </div>
 
-                <ChatInput 
+                <ChatInput
                   onSendMessage={handleSendMessage}
                   onScreenshot={handleScreenshot}
                   isCapturing={isCapturing}
                   pendingScreenshot={pendingScreenshot}
                   onRemoveScreenshot={() => setPendingScreenshot(null)}
                 />
-
               </motion.div>
             )}
 
+            {/* ── System Metrics ── */}
             {activeTab === 'metrics' && (
               <motion.div
                 key="metrics"
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
-                className="metrics-view panel-glass"
+                className="panel-glass"
                 style={{ flex: 1, padding: '30px', overflowY: 'auto' }}
               >
                 <h2>System Telemetry</h2>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '20px', marginTop: '30px' }}>
-                  <div className="stat-card" style={{ background: 'rgba(255,255,255,0.03)' }}>
-                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '15px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '20px', marginTop: '24px' }}>
+                  <div className="metric-card">
+                    <div className="metric-header">
                       <Cpu size={20} color="var(--accent-primary)" />
-                      <span style={{ fontWeight: 600 }}>Processor Load</span>
+                      <span>Processor Load</span>
                     </div>
-                    <div style={{ fontSize: '2rem', fontWeight: 800 }}>{metrics.cpu}%</div>
+                    <div className="metric-value">{metrics.cpu}%</div>
+                    <Sparkline data={cpuHistory} color="var(--accent-primary)" />
                   </div>
-                  <div className="stat-card" style={{ background: 'rgba(255,255,255,0.03)' }}>
-                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '15px' }}>
+                  <div className="metric-card">
+                    <div className="metric-header">
                       <Database size={20} color="var(--accent-secondary)" />
-                      <span style={{ fontWeight: 600 }}>Memory Usage</span>
+                      <span>Memory Usage</span>
                     </div>
-                    <div style={{ fontSize: '2rem', fontWeight: 800 }}>{metrics.ram} GB</div>
-                    <div style={{ color: 'var(--text-dim)', fontSize: '0.8rem' }}>of {metrics.totalRam} GB available</div>
+                    <div className="metric-value">{metrics.ram} GB</div>
+                    <div className="metric-sub">of {metrics.totalRam} GB total</div>
+                    <Sparkline data={ramHistory} color="var(--accent-secondary)" />
                   </div>
-                </div>
-                {/* Visual Placeholder for Graph */}
-                <div style={{ marginTop: '30px', height: '200px', background: 'rgba(255,255,255,0.02)', borderRadius: '20px', border: '1px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)' }}>
-                  <div style={{ textAlign: 'center' }}>
-                    <Activity size={40} style={{ marginBottom: '10px', opacity: 0.3 }} />
-                    <p>Real-time performance graph incoming...</p>
+                  <div className="metric-card">
+                    <div className="metric-header">
+                      <HardDrive size={20} color="#10b981" />
+                      <span>Disk Usage</span>
+                    </div>
+                    <div className="metric-value">{metrics.disk} GB</div>
+                    <div className="metric-sub">of {metrics.totalDisk} GB on C:</div>
+                    <div className="stat-bar" style={{ marginTop: '12px', height: '8px' }}>
+                      <div className="stat-bar-fill" style={{
+                        width: `${parseFloat(metrics.totalDisk) > 0 ? (parseFloat(metrics.disk) / parseFloat(metrics.totalDisk)) * 100 : 0}%`,
+                        background: '#10b981',
+                      }} />
+                    </div>
                   </div>
-                </div>
-              </motion.div>
-            )}
-
-            {activeTab === 'files' && (
-              <motion.div
-                key="files"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="files-view panel-glass"
-                style={{ flex: 1, padding: '30px', overflowY: 'auto' }}
-              >
-                <h2>File Explorer</h2>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px', marginTop: '30px' }}>
-                   {['Screenshots', 'Memory', 'Downloads', 'Documents', 'Skills', 'Logs'].map(folder => (
-                     <div key={folder} className="stat-card" style={{ background: 'rgba(255,255,255,0.03)', cursor: 'pointer', transition: 'var(--transition)' }}>
-                        <HardDrive size={24} style={{ marginBottom: '10px', color: 'var(--accent-primary)' }} />
-                        <div style={{ fontWeight: 600 }}>{folder}</div>
-                     </div>
-                   ))}
+                  <div className="metric-card">
+                    <div className="metric-header">
+                      <Zap size={20} color="#f59e0b" />
+                      <span>Session Info</span>
+                    </div>
+                    <div style={{ fontSize: '0.85rem', marginTop: '8px', lineHeight: 1.8 }}>
+                      <div>Model: <code>{serverInfo?.model || 'loading...'}</code></div>
+                      <div>Turns: <strong>{messages.filter(m => m.sender === 'user').length}</strong></div>
+                      <div>Skills: <strong>{loadedSkills.length}</strong></div>
+                    </div>
+                  </div>
                 </div>
               </motion.div>
             )}
 
-            {activeTab === 'security' && (
+            {/* ── Activity Feed ── */}
+            {activeTab === 'activity' && (
               <motion.div
-                key="security"
+                key="activity"
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
-                className="security-view panel-glass"
+                className="panel-glass"
                 style={{ flex: 1, padding: '30px', overflowY: 'auto' }}
               >
-                <h2>Security & Activity Logs</h2>
-                <div style={{ marginTop: '30px' }}>
-                  <div className="log-entry" style={{ padding: '15px', borderBottom: '1px solid var(--border)', display: 'flex', gap: '15px' }}>
-                    <Clock size={16} color="var(--accent-primary)" />
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>System Initialized</div>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>{new Date().toLocaleString()} - Agent online and scanning environment.</div>
+                <h2>Activity Feed</h2>
+                <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem', marginTop: '8px' }}>
+                  Real-time events from all PersonalClaw subsystems
+                </p>
+
+                <div className="activity-list" style={{ marginTop: '20px' }}>
+                  {activityFeed.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-dim)' }}>
+                      <Activity size={40} style={{ marginBottom: '12px', opacity: 0.3 }} />
+                      <p>No activity yet. Start chatting to see events here.</p>
                     </div>
-                  </div>
-                  <div className="log-entry" style={{ padding: '15px', borderBottom: '1px solid var(--border)', display: 'flex', gap: '15px' }}>
-                    <Clock size={16} color="var(--accent-secondary)" />
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Dashboard Connected</div>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>Session handshake completed via Socket.io.</div>
+                  )}
+                  {[...activityFeed].reverse().map((item) => (
+                    <div key={item.id} className="activity-item">
+                      <div className={`activity-dot ${item.type.includes('fail') || item.type.includes('error') ? 'red' : item.type.includes('complete') || item.type.includes('connect') ? 'green' : 'blue'}`} />
+                      <div style={{ flex: 1 }}>
+                        <div className="activity-summary">{item.summary}</div>
+                        <div className="activity-meta">
+                          {formatTime(item.timestamp)} &middot; {item.source}
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+
+            {/* ── Skills & Config ── */}
+            {activeTab === 'skills' && (
+              <motion.div
+                key="skills"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="panel-glass"
+                style={{ flex: 1, padding: '30px', overflowY: 'auto' }}
+              >
+                <h2>Loaded Skills ({loadedSkills.length})</h2>
+                <div className="skills-grid" style={{ marginTop: '20px' }}>
+                  {loadedSkills.map((skill) => (
+                    <div key={skill.name} className="skill-card">
+                      <div className="skill-name">{skill.name}</div>
+                      <div className="skill-desc">{skill.description}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <h2 style={{ marginTop: '30px' }}>Quick Commands</h2>
+                <div className="commands-grid" style={{ marginTop: '16px' }}>
+                  {commands.map(cmd => (
+                    <button
+                      key={cmd.cmd}
+                      className="command-card"
+                      onClick={() => executeCommand(cmd.cmd)}
+                    >
+                      <span className="command-icon">{cmd.icon}</span>
+                      <span className="command-label">{cmd.label}</span>
+                      <code className="command-cmd">{cmd.cmd}</code>
+                    </button>
+                  ))}
                 </div>
               </motion.div>
             )}
@@ -396,176 +622,78 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      <style>{`
-        .panel-glass {
-          background: var(--panel-bg);
-          backdrop-filter: blur(12px);
-          border: 1px solid var(--border);
-          border-radius: 24px;
-          box-shadow: var(--glass-shadow);
-        }
-        .nav-item {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 12px 16px;
-          border-radius: 12px;
-          color: var(--text-dim);
-          cursor: pointer;
-          transition: var(--transition);
-          margin-bottom: 8px;
-        }
-        .nav-item:hover {
-          color: var(--text-main);
-          background: rgba(255,255,255,0.05);
-        }
-        body.light-theme .nav-item:hover {
-          background: rgba(0,0,0,0.05);
-        }
-        .nav-item.active {
-          color: white;
-          background: var(--accent-primary);
-          box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
-        }
-        .agent-status {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 12px;
-          background: var(--input-bg);
-          border: 1px solid var(--border);
-          border-radius: 16px;
-          flex: 1;
-        }
-        .message-text p {
-          margin: 0;
-        }
-        .theme-toggle {
-          background: var(--input-bg);
-          border: 1px solid var(--border);
-          border-radius: 16px;
-          padding: 12px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: var(--text-main);
-          transition: var(--transition);
-        }
-        .theme-toggle:hover {
-          border-color: var(--accent-primary);
-          color: var(--accent-primary);
-        }
-        .screenshot-btn {
-          height: 48px;
-          width: 48px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: var(--input-bg);
-          border: 1px solid var(--border);
-          border-radius: 12px;
-          color: var(--text-dim);
-          cursor: pointer;
-          transition: var(--transition);
-        }
-        .screenshot-btn:hover:not(:disabled) {
-          border-color: var(--accent-primary);
-          color: var(--accent-primary);
-          background: rgba(99, 102, 241, 0.1);
-        }
-        .screenshot-btn:disabled {
-          opacity: 0.5;
-          cursor: wait;
-        }
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        .spin {
-          animation: spin 1s linear infinite;
-        }
-        .typing-indicator {
-          display: flex;
-          gap: 4px;
-          padding: 12px 16px;
-          background: var(--msg-bot-bg);
-          border: 1px solid var(--border);
-          border-radius: 12px;
-          border-bottom-left-radius: 4px;
-          width: fit-content;
-        }
-        .typing-dot {
-          width: 6px;
-          height: 6px;
-          background: var(--accent-primary);
-          border-radius: 50%;
-          animation: typing 1.4s infinite ease-in-out;
-        }
-        .typing-dot:nth-child(1) { animation-delay: 0s; }
-        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
-        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
-        @keyframes typing {
-          0%, 80%, 100% { transform: translateY(0); opacity: 0.3; }
-          40% { transform: translateY(-5px); opacity: 1; }
-        }
-        .input-area-outer {
-          background: rgba(0, 0, 0, 0.1);
-          border-top: 1px solid var(--border);
-        }
-        .pending-preview {
-          padding: 10px 20px;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          position: relative;
-        }
-        .pending-preview img {
-          height: 50px;
-          width: 50px;
-          object-fit: cover;
-          border-radius: 8px;
-          border: 2px solid var(--accent-primary);
-        }
-        .remove-preview {
-          position: absolute;
-          top: 5px;
-          left: 55px;
-          background: #ef4444;
-          color: white;
-          border: none;
-          border-radius: 50%;
-          width: 18px;
-          height: 18px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-        }
-        .message-text {
-          position: relative;
-          padding-right: 30px !important;
-        }
-        .copy-btn {
-          position: absolute;
-          top: 0;
-          right: 0;
-          background: transparent;
-          border: none;
-          color: var(--text-dim);
-          cursor: pointer;
-          opacity: 0;
-          transition: var(--transition);
-          padding: 4px;
-        }
-        .message.bot:hover .copy-btn {
-          opacity: 1;
-        }
-        .copy-btn:hover {
-          color: var(--accent-primary);
-        }
-      `}</style>
+      {/* ── Command Palette ── */}
+      <AnimatePresence>
+        {showCommandPalette && (
+          <motion.div
+            className="command-palette-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowCommandPalette(false)}
+          >
+            <motion.div
+              className="command-palette"
+              initial={{ opacity: 0, y: -20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="palette-search">
+                <Search size={18} />
+                <input
+                  ref={commandPaletteRef}
+                  type="text"
+                  placeholder="Type a command..."
+                  value={commandSearch}
+                  onChange={(e) => setCommandSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && filteredCommands.length > 0) {
+                      executeCommand(filteredCommands[0].cmd);
+                    }
+                  }}
+                />
+                <kbd>ESC</kbd>
+              </div>
+              <div className="palette-results">
+                {filteredCommands.map((cmd) => (
+                  <button
+                    key={cmd.cmd}
+                    className="palette-item"
+                    onClick={() => executeCommand(cmd.cmd)}
+                  >
+                    <span className="palette-icon">{cmd.icon}</span>
+                    <span className="palette-label">{cmd.label}</span>
+                    <code className="palette-cmd">{cmd.cmd}</code>
+                  </button>
+                ))}
+                {filteredCommands.length === 0 && (
+                  <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-dim)' }}>
+                    No commands found
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
+      {/* ── Toast Notifications ── */}
+      <div className="toast-container">
+        <AnimatePresence>
+          {toasts.map((toast) => (
+            <motion.div
+              key={toast.id}
+              className={`toast toast-${toast.type}`}
+              initial={{ opacity: 0, y: 20, x: 20 }}
+              animate={{ opacity: 1, y: 0, x: 0 }}
+              exit={{ opacity: 0, x: 50 }}
+            >
+              {toast.text}
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
     </div>
   );
 };

@@ -7,6 +7,10 @@ import { memorySkill } from './memory.js';
 import { schedulerSkill, initScheduler } from './scheduler.js';
 import { paperclipSkill } from './paperclip.js';
 import { browserSkill } from './browser.js';
+import { httpSkill } from './http.js';
+import { networkSkill } from './network.js';
+import { processManagerSkill } from './process-manager.js';
+import { systemInfoSkill } from './system-info.js';
 import { Skill } from '../types/skill.js';
 
 export const skills: Skill[] = [
@@ -19,6 +23,10 @@ export const skills: Skill[] = [
   memorySkill,
   paperclipSkill,
   browserSkill,
+  httpSkill,
+  networkSkill,
+  processManagerSkill,
+  systemInfoSkill,
 ];
 
 export { initScheduler };
