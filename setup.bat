@@ -67,11 +67,21 @@ echo [5/5] Finalizing...
 if not exist screenshots mkdir screenshots
 if not exist memory mkdir memory
 
+echo [6/6] Chrome Extension Setup...
 echo.
+echo   To use the Browser Relay (control your real tabs), you MUST:
+echo   1. Open Chrome and go to: chrome://extensions
+echo   2. Enable "Developer mode" (top right)
+echo   3. Click "Load unpacked"
+echo   4. Select the 'extension' folder in this directory:
+echo      %~dp0extension
+echo.
+
 echo   ╔══════════════════════════════════════════════════════╗
 echo   ║            Setup Complete! PersonalClaw is ready.     ║
 echo   ╠══════════════════════════════════════════════════════╣
-echo   ║   To start the system, run: start.bat                ║
+echo   ║   1. Ensure Chrome Extension is loaded (see above)    ║
+echo   ║   2. To start the system, run: start.bat             ║
 echo   ╚══════════════════════════════════════════════════════╝
 echo.
 pause

@@ -22,6 +22,7 @@ if not exist .env (
 )
 
 echo [Server] Dashboard will be at http://localhost:5173
+echo [Relay]  Ensure Chrome Extension is loaded in Developer Mode.
 echo [Server] Control-C to stop both processes.
 echo.
 
