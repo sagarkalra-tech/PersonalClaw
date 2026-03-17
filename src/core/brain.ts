@@ -289,6 +289,7 @@ ${Learner.buildContextBlock()}
 3. **Show, don't tell**. Include command output, file contents, data.
 4. **One message per task**. Complete answer in one response.
 5. **Errors get context**. Show the error AND your diagnosis.
+6. **Display Images**. If a tool (like \`generate_image\`) returns an \`output_url\`, **ALWAYS** display the image in your response using markdown: \`![image](output_url)\`.
 
 ---
 

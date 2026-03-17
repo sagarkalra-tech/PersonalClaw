@@ -23,6 +23,8 @@ const io = new Server(server, {
 });
 
 app.use(express.json());
+app.use('/outputs', express.static(path.join(process.cwd(), 'outputs')));
+app.use('/screenshots', express.static(path.join(process.cwd(), 'screenshots')));
 
 // ─── Core Initialization ────────────────────────────────────────────
 console.log('[Server] Initializing PersonalClaw v10...');

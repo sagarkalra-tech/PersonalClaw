@@ -2,7 +2,15 @@
 
 All notable changes to the PersonalClaw agent will be documented in this file.
 
+## [10.4.1] - 2026-03-17
+
+### Image Generation Enhancements
+- **Local Serving**: The `outputs/` directory is now served as a static asset by the Express server.
+- **Skill Integration**: The `generate_image` skill now returns an `output_url` (http://localhost:3000/outputs/...) for generated images.
+- **Brain Rule**: Updated the system prompt (Rule 6) to ensure the AI always displays generated images using markdown `![image](output_url)`.
+
 ## [10.4.0] - 2026-03-16
+
 
 ### New Multi-Media Skills
 Implemented two powerful new skills for handling PDF documents and AI image generation.

@@ -63,7 +63,8 @@ Two modes with auto-fallback:
 - 'pro': gemini-3-pro-image-preview (highest quality, best for detailed photorealistic prompts)
 - 'flash': gemini-3-1-flash-image-preview (blazing fast, great for creative and interactive use)
 - 'auto': Tries pro first, falls back to flash on failure.
-Saves all images to the outputs/ folder.`,
+Saves all images to the outputs/ folder.
+To display the image in the chat, use markdown: ![image](http://localhost:3000/outputs/filename.png) using the filename returned.`,
   parameters: {
     type: 'object',
     properties: {
@@ -119,24 +120,25 @@ Saves all images to the outputs/ folder.`,
     try {
       if (model === 'flash') {
         const result = await generateNativeImage(apiKey, FLASH_MODEL, finalPrompt, outputName);
-        return { success: true, output_path: result.path, model_used: result.model };
+        return { success: true, output_path: result.path, output_url: `http://localhost:3000/outputs/${path.basename(result.path)}`, model_used: result.model };
       }
 
       if (model === 'pro') {
         const result = await generateNativeImage(apiKey, PRO_MODEL, finalPrompt, outputName);
-        return { success: true, output_path: result.path, model_used: result.model };
+        return { success: true, output_path: result.path, output_url: `http://localhost:3000/outputs/${path.basename(result.path)}`, model_used: result.model };
       }
 
       // auto — try pro, fallback to flash
       try {
         const result = await generateNativeImage(apiKey, PRO_MODEL, finalPrompt, outputName);
-        return { success: true, output_path: result.path, model_used: result.model };
+        return { success: true, output_path: result.path, output_url: `http://localhost:3000/outputs/${path.basename(result.path)}`, model_used: result.model };
       } catch (proErr: any) {
         console.warn('[imagegen] Pro model failed, falling back to Flash:', proErr.message);
         const result = await generateNativeImage(apiKey, FLASH_MODEL, finalPrompt, outputName);
         return {
           success: true,
           output_path: result.path,
+          output_url: `http://localhost:3000/outputs/${path.basename(result.path)}`,
           model_used: result.model,
           fallback: true,
           fallback_reason: proErr.message,
