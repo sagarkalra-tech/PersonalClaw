@@ -87,11 +87,15 @@ const App: React.FC = () => {
   const commandPaletteRef = useRef<HTMLInputElement>(null);
 
   // ── Toast notifications ──
-  const addToast = useCallback((text: string, type: 'info' | 'success' | 'error' = 'info') => {
-    const id = Date.now().toString();
-    setToasts(prev => [...prev, { id, text, type }]);
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
+  const removeToast = useCallback((id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
+
+  const addToast = useCallback((text: string, type: 'info' | 'success' | 'error' = 'info') => {
+    const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+    setToasts(prev => [...prev.slice(-4), { id, text, type }]);
+    setTimeout(() => removeToast(id), 5000);
+  }, [removeToast]);
 
   // ── Socket.io connection ──
   useEffect(() => {
@@ -164,6 +168,7 @@ const App: React.FC = () => {
   // ── Keyboard shortcuts ──
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (e.repeat) return;
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
         setShowCommandPalette(prev => !prev);
@@ -609,6 +614,9 @@ const App: React.FC = () => {
               initial={{ opacity: 0, y: 20, x: 20 }}
               animate={{ opacity: 1, y: 0, x: 0 }}
               exit={{ opacity: 0, x: 50 }}
+              onClick={() => removeToast(toast.id)}
+              style={{ cursor: 'pointer' }}
+              title="Click to dismiss"
             >
               {toast.text}
             </motion.div>

@@ -1,4 +1,4 @@
-# PersonalClaw v11.0 🛸
+# PersonalClaw v11.1 🛸
 
 **The next-generation Windows AI agent. Local. Private. Unstoppable.**
 
@@ -10,7 +10,11 @@ PersonalClaw is a sophisticated, locally-hosted AI agent that combines Google Ge
 
 ---
 
-## ✨ v11.0 — Multi-Agent Architecture
+## ✨ v11.1 — Multi-Agent Architecture
+
+### 🚀 One-Click Setup & Run (NEW)
+- **`setup.bat`** — Automated, modular installation. Skip what you don't need (Telegram, Dashboard, etc.).
+- **`start.bat`** — Launches the backend and dashboard in separate, dedicated terminals automatically.
 
 ### 🧩 Multi-Chat Workspace (3 Panes)
 - **Up to 3 independent chat panes** — each with its own isolated Brain instance
@@ -50,33 +54,25 @@ PersonalClaw is a sophisticated, locally-hosted AI agent that combines Google Ge
 
 ---
 
-## 🚀 Quick Start (3 minutes)
+## 🚀 Quick Start (Windows)
 
 ### Prerequisites
 - **Node.js** 18+ ([download](https://nodejs.org/))
-- **Git** ([download](https://git-scm.com/))
-- **Python** 3.10+ ([download](https://www.python.org/))
 - **Google Gemini API Key** (free at [AI Studio](https://aistudio.google.com/))
 
-### Install
+### 1. Install & Configure
+Download the repo and run:
 ```bash
-git clone <repo-url> && cd PersonalClaw
-npm install && npx playwright install chromium
-cd dashboard && npm install && cd ..
-cp .env.example .env
-# Add your GEMINI_API_KEY to .env
+setup.bat
 ```
+Follow the prompts to install dependencies and enter your API key.
 
-### Run
+### 2. Run
+Simply run:
 ```bash
-# Terminal 1
-npm run dev
-
-# Terminal 2
-cd dashboard && npm run dev
+start.bat
 ```
-
-Open [http://localhost:5173](http://localhost:5173)
+Open [http://localhost:5173](http://localhost:5173) (The batch file will launch this for you).
 
 ---
 
