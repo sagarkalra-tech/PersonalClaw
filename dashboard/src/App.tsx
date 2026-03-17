@@ -172,9 +172,15 @@ const App: React.FC = () => {
       if (e.key === 'Escape') {
         setShowCommandPalette(false);
       }
-      // Superuser toggle (Ctrl+Shift+D) — shows raw agent logs
-      if (e.ctrlKey && e.shiftKey && e.key === 'D') {
-        setIsSuperUser(prev => !prev);
+      // Superuser toggle (Alt+Shift+S) — shows raw agent logs
+      if (e.altKey && e.shiftKey && e.code === 'KeyS') {
+        e.preventDefault();
+        console.log('Superuser mode toggle triggered');
+        setIsSuperUser(prev => {
+          const next = !prev;
+          addToast(next ? 'Super User Mode: Enabled' : 'Super User Mode: Disabled', next ? 'success' : 'info');
+          return next;
+        });
       }
     };
     window.addEventListener('keydown', handler);

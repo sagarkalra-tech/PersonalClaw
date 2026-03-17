@@ -37,7 +37,7 @@ All notable changes to the PersonalClaw agent will be documented in this file.
 - Worker hard timeout: 5 minutes — resolves with error string, never crashes
 - Collapsible sub-agent side panel per pane — slides in from right on worker activity
 - Worker statuses: queued / running / waiting_for_lock / completed / failed / timed_out
-- Superuser raw log viewer: `Ctrl+Shift+D` toggles, View Logs on completed worker cards
+- Superuser raw log viewer: `Alt+Shift+S` toggles, View Logs on completed worker cards
 
 ### Skill Lock System — Concurrent Resource Protection
 - New `src/core/skill-lock.ts` — ExclusiveLock + ReadWriteLock
