@@ -35,7 +35,7 @@ if /i "%SETUP_CORE%"=="y" (
 set /p SETUP_PLAYWRIGHT="Install Playwright Browser (required for Browser/Vision)? (y/n) [y]: "
 if "%SETUP_PLAYWRIGHT%"=="" set SETUP_PLAYWRIGHT=y
 if /i "%SETUP_PLAYWRIGHT%"=="y" (
-    echo [2/5] Installing Browser (Chromium)...
+    echo [2/5] Installing Browser Chromium...
     call npx playwright install chromium || echo [WARNING] Playwright install failed. Browser skills may not work.
 ) else (
     echo [SKIP] Playwright Browser skipped.
@@ -92,7 +92,7 @@ if not exist .env (
 :: Prompt for Gemini Key
 set /p GEMINI_KEY="Enter your Google Gemini API Key (get it at aistudio.google.com): "
 if not "!GEMINI_KEY!"=="" (
-    powershell -Command "(gc .env) -replace 'GEMINI_API_KEY=.*', 'GEMINI_API_KEY=!GEMINI_KEY!' | Out-File -encoding ASCII .env"
+    powershell -Command "^(gc .env^) -replace 'GEMINI_API_KEY=.*', 'GEMINI_API_KEY=!GEMINI_KEY!' | Out-File -encoding ASCII .env"
     echo [OK] Gemini API Key updated.
 ) else (
     echo [SKIP] Gemini API Key not updated.
@@ -104,11 +104,11 @@ if "%SETUP_TG%"=="" set SETUP_TG=n
 if /i "%SETUP_TG%"=="y" (
     set /p TG_TOKEN="Enter your Telegram Bot Token (from @BotFather): "
     if not "!TG_TOKEN!"=="" (
-        powershell -Command "(gc .env) -replace 'TELEGRAM_BOT_TOKEN=.*', 'TELEGRAM_BOT_TOKEN=!TG_TOKEN!' | Out-File -encoding ASCII .env"
+        powershell -Command "^(gc .env^) -replace 'TELEGRAM_BOT_TOKEN=.*', 'TELEGRAM_BOT_TOKEN=!TG_TOKEN!' | Out-File -encoding ASCII .env"
         
         set /p TG_ID="Enter your Authorized Telegram Chat ID (optional): "
         if not "!TG_ID!"=="" (
-            powershell -Command "(gc .env) -replace 'AUTHORIZED_CHAT_ID=.*', 'AUTHORIZED_CHAT_ID=!TG_ID!' | Out-File -encoding ASCII .env"
+            powershell -Command "^(gc .env^) -replace 'AUTHORIZED_CHAT_ID=.*', 'AUTHORIZED_CHAT_ID=!TG_ID!' | Out-File -encoding ASCII .env"
         )
         echo [OK] Telegram configured.
     )
