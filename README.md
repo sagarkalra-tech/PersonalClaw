@@ -130,7 +130,9 @@ Open [http://localhost:5173](http://localhost:5173) (The batch file will launch 
 
 - **[USER_GUIDE.md](docs/USER_GUIDE.md)** — End-user walkthrough and tips
 - **[SETUP_GUIDE.md](docs/SETUP_GUIDE.md)** — Installation & configuration
-- **[VERSION_LOG.md](docs/version_log.md)** — Complete version history (v1 → v10)
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** — Technical architecture and communication specs
+- **[DIR_STRUCTURE.md](docs/DIR_STRUCTURE.md)** — Entire project file mapping
+- **[version_log.md](docs/version_log.md)** — Complete version history (v1 → v12)
 - **[AGENTS.md](AGENTS.md)** — Agent operating instructions and guidelines
 
 ---
@@ -149,8 +151,9 @@ Open [http://localhost:5173](http://localhost:5173) (The batch file will launch 
 | Metric | Value |
 |--------|-------|
 | **Core Skills** | 15 |
-| **Org Skills** | 2 |
-| **Total Skills** | 17 |
+| **Org-Mgmt Skills** | 1 |
+| **Org-Agent Skills** | 10 |
+| **Total Skills** | 26 |
 | **Max Orgs** | 10 |
 | **Max human panes** | 3 |
 | **Max workers/pane** | 5 |

@@ -18,6 +18,8 @@ PersonalClaw/
 |   |   +-- org-heartbeat.ts     # Heartbeat Engine — cron + event triggers
 |   |   +-- org-task-board.ts    # Task Board — ticketing system per org
 |   |   +-- org-agent-runner.ts  # Agent Runner — executes autonomous agents
+|   |   +-- org-skills.ts        # Org-specific tools (tickets, memory, delegate)
+|   |   +-- org-management-skill.ts # Human tools for org management
 |   |   +-- telegram-brain.ts    # Isolated Telegram Brain instance
 |   |   +-- sessions.ts          # Session Manager
 |   |   +-- audit.ts             # Audit Logger
@@ -25,10 +27,8 @@ PersonalClaw/
 |   |   +-- browser.ts           # Playwright browser core
 |   |   +-- chrome-mcp.ts        # Chrome Native MCP adapter
 |   |   +-- relay.ts             # Extension Relay bridge
-|   +-- skills/                  # 17 tool modules
+|   +-- skills/                  # Core tool modules
 |   |   +-- index.ts             # Skill registry
-|   |   +-- org-skills.ts        # Org-specific tools (tickets, memory, delegate)
-|   |   +-- org-management-skill.ts # Human tools for org management
 |   |   +-- shell.ts / files.ts / etc. (15 base skills)
 |   +-- interfaces/
 |   |   +-- telegram.ts          # Telegram bot
@@ -43,11 +43,13 @@ PersonalClaw/
 |       |   +-- AgentCard.tsx         # Agent status & chat trigger
 |       |   +-- TicketBoard.tsx       # Kanban task board
 |       |   +-- AgentChatPane.tsx     # Direct persistent agent chat
+|       |   +-- ConversationPane.tsx  # Legacy/Main chat pane
 |       |   +-- WorkerCard.tsx        # Worker status card
 |       +-- hooks/
 |       |   +-- useConversations.ts   # Human chat state
 |       |   +-- useOrgs.ts            # Org & heartbeats state
 |       |   +-- useOrgChat.ts         # Persistent agent chat sessions
+|       |   +-- useAgents.ts          # Agent registry state
 |       +-- types/
 |           +-- conversation.ts / org.ts
 +-- docs/                        # Project documentation (v12 Plans, Guides)
@@ -56,6 +58,54 @@ PersonalClaw/
 +-- scripts/                     # Utility scripts
 +-- extension/                   # Chrome extension
 ```
+
+## Technical Architecture (v12)
+
+```mermaid
+graph TD
+    User([User]) <--> Dashboard[Vite React Dashboard]
+    User <--> Telegram[Telegram Bot]
+    
+    subgraph PersonalClaw_Core
+        Server[Express + Socket.io Server]
+        OrgManager[Org Manager]
+        Heartbeat[Heartbeat Engine]
+        Runner[Agent Runner]
+        Brain[Gemini Reasoning Engine]
+        Registry[Skill Registry]
+    end
+    
+    Dashboard <--> Server
+    Telegram <--> Server
+    Server <--> OrgManager
+    OrgManager <--> Heartbeat
+    Heartbeat <--> Runner
+    Runner <--> Brain
+    Brain <--> Registry
+    
+    subgraph Skills
+        Registry --> PowerShell[PowerShell Skill]
+        Registry --> OrgSkills[Org Skills: Ticket/Memory]
+        Registry --> Vision[Vision Skill]
+        Registry --> Browser[Unified Browser Skill]
+        Registry --> File[File System Skill]
+        Registry --> Manager[Org Management Skill]
+    end
+```
+
+---
+
+## AI Logic (Brain Loop)
+
+PersonalClaw runs a **multi-turn tool execution loop**:
+1. Human or Heartbeat triggers an agent.
+2. If Heartbeat: OrgAgentRunner creates a Brain with **Persona Injection** (Mission + Role).
+3. Brain checks Task Board and Memory, then builds a Plan.
+4. Tools execute via `handleToolCall`, acquiring global/per-path locks.
+5. Loop repeats until the agent has achieved its run goals or delegates.
+6. Run summary is recorded and session history is saved.
+
+---
 
 ## Key Technologies
 - Runtime: Node.js with TypeScript (tsx for dev, tsc for build)

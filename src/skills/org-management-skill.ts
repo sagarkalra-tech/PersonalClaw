@@ -1,5 +1,5 @@
-import { orgManager, AutonomyLevel } from './org-manager.js';
-import { orgHeartbeat } from './org-heartbeat.js';
+import { orgManager, AutonomyLevel } from '../core/org-manager.js';
+import { orgHeartbeat } from '../core/org-heartbeat.js';
 import type { Skill, SkillMeta } from '../types/skill.js';
 
 export const orgManagementSkill: Skill = {

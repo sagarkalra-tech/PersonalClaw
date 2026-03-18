@@ -11,7 +11,7 @@ PersonalClaw is a local-first AI automation platform for Windows, integrating Ge
 - `/src/core`: Fundamental systems like the Brain, Event Bus, Session Management, Agent Registry, and the **v12 Org Orchestration** core (`org-manager.ts`, `org-heartbeat.ts`, `org-task-board.ts`, `org-agent-runner.ts`).
 - `/src/skills`: Individual tool modules (e.g., shell, files, browser, vision, **org-skills**, **org-management**) that the AI can execute.
 - `/dashboard`: Frontend React + Vite application for interacting with the AI, including the **v12 Org Workspace**.
-- `/docs`: Project documentation, implementation plans, and architectural guides (v12 Plan).
+- `/docs`: Project documentation, including standard user/setup guides, the `ARCHITECTURE.md` spec, and historical/roadmap data in `docs/Updates/`.
 - `/extension`: Chrome extension for relaying data to the backend.
 - `/scripts`: Utility scripts for automation and setup.
 - `/memory`: (Hidden/Local) Persistent data including sessions, knowledge, and **v12 Org data** (`memory/orgs/`).
@@ -33,15 +33,17 @@ PersonalClaw/
 │   │   │   ├── AgentChatPane.tsx
 │   │   │   ├── ChatInput.tsx
 │   │   │   ├── ChatWorkspace.tsx
+│   │   │   ├── ConversationPane.tsx
 │   │   │   ├── CreateAgentModal.tsx
 │   │   │   ├── CreateOrgModal.tsx
 │   │   │   ├── OrgWorkspace.tsx
 │   │   │   ├── TicketBoard.tsx
 │   │   │   └── WorkerCard.tsx
 │   │   ├── hooks
-│   │   │   ├── useOrgs.ts
+│   │   │   ├── useAgents.ts
+│   │   │   ├── useConversations.ts
 │   │   │   ├── useOrgChat.ts
-│   │   │   └── useConversations.ts
+│   │   │   └── useOrgs.ts
 │   │   ├── types
 │   │   │   ├── conversation.ts
 │   │   │   └── org.ts
@@ -62,15 +64,14 @@ PersonalClaw/
 ├── docs
 │   ├── assets
 │   │   └── logo.png
-│   ├── codebase_documentation.md
-│   ├── codebase_snapshot.md
-│   ├── PersonalClaw_v11_Implementation_Plan_FINAL.md
-│   ├── PersonalClaw_v12_Implementation_Plan_FINAL_v2.md
+│   ├── Updates
+│   │   ├── PersonalClaw_v11_Implementation_Plan_FINAL.md
+│   │   ├── PersonalClaw_v12_Implementation_Plan_FINAL_v2.md
+│   │   └── V10_FEATURES.md
+│   ├── ARCHITECTURE.md
 │   ├── SETUP_GUIDE.md
 │   ├── USER_GUIDE.md
-│   ├── V10_FEATURES.md
-│   ├── version_log.md
-│   └── walkthrough.md
+│   └── version_log.md
 ├── exports
 ├── extension
 │   ├── background.js
@@ -79,7 +80,10 @@ PersonalClaw/
 │   ├── popup.html
 │   └── popup.js
 ├── scripts
-│   └── launch_persistent_browser.ps1
+│   ├── check_ssl.ps1
+│   ├── launch_persistent_browser.ps1
+│   ├── list_models.js
+│   └── test_vision.js
 ├── src
 │   ├── core
 │   │   ├── agent-registry.ts

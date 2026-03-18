@@ -14,7 +14,7 @@ import { systemInfoSkill } from './system-info.js';
 import { pdfSkill } from './pdf.js';
 import { imagegenSkill } from './imagegen.js';
 import { agentSpawnSkill } from './agent-spawn.js';
-import { orgManagementSkill } from '../core/org-management-skill.js';
+import { orgManagementSkill } from './org-management-skill.js';
 import { Skill, SkillMeta } from '../types/skill.js';
 
 export const skills: Skill[] = [

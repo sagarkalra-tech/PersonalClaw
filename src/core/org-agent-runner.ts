@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { orgManager, OrgAgent, Org } from './org-manager.js';
 import { orgTaskBoard } from './org-task-board.js';
-import { orgSkills } from './org-skills.js';
+import { orgSkills } from '../skills/org-skills.js';
 import { eventBus, Events } from './events.js';
 import { getToolDefinitions } from '../skills/index.js';
 

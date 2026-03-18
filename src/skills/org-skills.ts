@@ -1,8 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { orgTaskBoard, TicketPriority } from './org-task-board.js';
-import { orgManager } from './org-manager.js';
-import { eventBus, Events } from './events.js';
+import { orgTaskBoard, TicketPriority } from '../core/org-task-board.js';
+import { orgManager } from '../core/org-manager.js';
+import { eventBus, Events } from '../core/events.js';
 import type { Skill, SkillMeta } from '../types/skill.js';
 
 // ─── org_read_agent_memory ────────────────────────────────────────
