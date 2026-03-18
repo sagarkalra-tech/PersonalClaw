@@ -3,6 +3,9 @@ export interface SkillMeta {
   conversationId: string;
   conversationLabel: string;
   isWorker: boolean;
+  // v12 org fields — optional, only set when skill is called by an org agent
+  orgId?: string;
+  orgAgentId?: string;
 }
 
 export interface Skill {

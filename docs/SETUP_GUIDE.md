@@ -1,22 +1,21 @@
-# 🏁 First-Time Setup Guide: PersonalClaw v10.0
+# 🏁 First-Time Setup Guide: PersonalClaw v12.0
 
-Welcome to PersonalClaw v10.0! Follow these steps to get the latest version running on your Windows device.
+Welcome to PersonalClaw v12.0! This version introduces **Autonomous AI Organisations**. Follow these steps to get running.
 
 ---
 
 ## 🛠️ Prerequisites
 
-Before you begin, ensure you have the following installed on your Windows machine:
+Before you begin, ensure you have the following installed:
 
 1.  **Node.js (v18 or higher)**: [Download here](https://nodejs.org/).
 2.  **Git**: [Download here](https://git-scm.com/).
-3.  **Python 3.10+**: [Download here](https://www.python.org/). (Ensure "Add Python to PATH" is checked during installation).
-4.  **Google Gemini API Key**: Generate a free key at [Google AI Studio](https://aistudio.google.com/).
-5.  **Chrome Browser**: Required if you want to use the optional Relay extension.
+3.  **Google Gemini API Key**: Generate a free key at [Google AI Studio](https://aistudio.google.com/).
+4.  **Chrome Browser**: Required for browser automation features.
 
 ---
 
-## 🚀 Installation & Setup
+## 🚀 Installation & Setup (One-Click)
 
 ### 1. Clone the Repository
 Open PowerShell and run:
@@ -25,24 +24,30 @@ git clone https://github.com/yourusername/PersonalClaw.git
 cd PersonalClaw
 ```
 
-### 2. Automatic Setup (Recommended)
-Simply run the setup batch file. This will install all dependencies, configure your `.env` file, and prompt you for your API keys:
+### 2. Automatic Setup
+Run the setup batch file. This will install all dependencies (Brain + Dashboard), configure your `.env` file, and prompt you for your Gemini API key:
 ```bash
 .\setup.bat
 ```
 
 ### 3. Running PersonalClaw
-Once setup is complete, you can launch both the Brain and the Dashboard with a single command:
+Once setup is complete, launch the entire system with a single command:
 ```bash
 .\start.bat
 ```
+This will open two terminal windows (Backend and Dashboard) and launch your browser to [http://localhost:5173](http://localhost:5173).
 
-### 4. Manual Installation (Alternative)
-If you prefer to do it manually:
-1.  **Install Brain deps**: `npm install`
-2.  **Install Browser**: `npx playwright install chromium`
-3.  **Install Dashboard deps**: `cd dashboard && npm install && cd ..`
-4.  **Configure `.env`**: Rename `.env.example` to `.env` and add your keys.
+---
+
+## 🏢 Setting Up Your First Organisation
+
+v12.0 is built around **AI Organisations**. To get started:
+
+1.  Open the Dashboard at [http://localhost:5173](http://localhost:5173).
+2.  Navigate to the **Organisations** tab in the sidebar.
+3.  Click **Add Organisation**.
+4.  **Important**: You must provide a **Root Directory** path. This is the real folder on your computer where the AI agents will perform their work (e.g., `C:\Projects\MyNewApp`).
+5.  Add your first **Agent** (e.g., "AI CEO" or "Lead Developer") and set their **Heartbeat** schedule.
 
 ---
 
@@ -50,7 +55,7 @@ If you prefer to do it manually:
 
 The agent has **built-in browser control** (Playwright) that works out of the box with its own persistent profile.
 
-### Extension Relay (Recommended — Easiest Setup)
+### Extension Relay (Recommended)
 
 Install the **PersonalClaw Relay** Chrome extension to let the agent interact with your real Chrome tabs:
 
@@ -60,53 +65,12 @@ Install the **PersonalClaw Relay** Chrome extension to let the agent interact wi
 4. The extension auto-connects to PersonalClaw (you'll see a green "ON" badge).
 5. Type `/relay` in PersonalClaw chat to verify the connection.
 
-The agent can now list your tabs, click elements, type in forms, scrape content, take screenshots, and more — all on your real Chrome session.
-
-### Native Chrome Connection (Advanced — for v10.2+)
-
-For deeper Chrome DevTools-level access (CDP/MCP):
-
-**Option A — Launch Chrome with remote debugging:**
-```
-chrome.exe --remote-debugging-port=9222 --user-data-dir=%TEMP%\chrome-debug
-```
-
-**Option B — Chrome 146+ auto-connection:**
-1. Open `chrome://inspect/#remote-debugging` in Chrome.
-2. Enable "Discover network targets" and add `localhost:9222`.
-3. Chrome's native MCP server activates automatically.
-
-**Then in PersonalClaw:**
-- Type `/chrome` in the chat, or
-- Ask the AI: *"connect to my Chrome"*
-
-All browser actions will now operate on your real Chrome session.
-
----
-
-## 🏎️ Running for the First Time
-
-You need to run the Agent and the Dashboard in two separate terminal windows:
-
-### Window 1: The Brain
-```bash
-npm run dev
-```
-
-### Window 2: The Dashboard
-```bash
-cd dashboard
-npm run dev
-```
-
-Once both are running, open your browser to [http://localhost:5173](http://localhost:5173).
-
 ---
 
 ## 🛡️ Usage Tips
 - **Security**: This agent can execute PowerShell commands. Never share your `.env` file!
-- **Refresh**: Use the `/new` command in chat to clear AI memory and save tokens.
+- **Organisations**: Use the Org Workspace to manage autonomous teams.
 - **Vision**: Use the Camera icon in the dashboard to share your screen with the AI.
 
 ---
-*“Your machine, your command.”*
+*“Your machine, your command, anywhere.”* 🚀

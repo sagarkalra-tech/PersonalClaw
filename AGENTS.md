@@ -2,66 +2,59 @@
 
 Welcome, Agent. You are a PersonalClaw agent operating within the PersonalClaw codebase - a local-first AI automation platform for Windows.
 
-## Project Structure (v11)
+## Project Structure (v12)
 
 ```
 PersonalClaw/
 +-- src/                         # TypeScript backend (Express + Socket.io + Gemini AI)
-|   +-- index.ts                 # Server entry point — multi-chat wiring, REST API, socket events
+|   +-- index.ts                 # Server entry point — multi-chat + Org wiring
 |   +-- core/                    # Core systems
-|   |   +-- brain.ts             # Brain class — Gemini integration, tool loop, abort, buildMeta
-|   |   +-- events.ts            # Event Bus — typed events, off(), 25+ event constants
-|   |   +-- skill-lock.ts        # Skill Lock Manager — exclusive + read-write locks
-|   |   +-- agent-registry.ts    # Agent Registry — worker lifecycle, queue, timeout
-|   |   +-- conversation-manager.ts  # Conversation Manager — up to 3 panes
+|   |   +-- brain.ts             # Brain class — Gemini integration, persona injection
+|   |   +-- events.ts            # Event Bus — typed events, 40+ constants
+|   |   +-- skill-lock.ts        # Skill Lock Manager — concurrent resource protection
+|   |   +-- agent-registry.ts    # Agent Registry — worker lifecycle
+|   |   +-- conversation-manager.ts  # Conversation Manager — human chat panes
+|   |   +-- org-manager.ts       # Org Manager — org/agent CRUD + persistence
+|   |   +-- org-heartbeat.ts     # Heartbeat Engine — cron + event triggers
+|   |   +-- org-task-board.ts    # Task Board — ticketing system per org
+|   |   +-- org-agent-runner.ts  # Agent Runner — executes autonomous agents
 |   |   +-- telegram-brain.ts    # Isolated Telegram Brain instance
-|   |   +-- sessions.ts          # Session Manager — save, list, search, restore
+|   |   +-- sessions.ts          # Session Manager
 |   |   +-- audit.ts             # Audit Logger
 |   |   +-- learner.ts           # Self-learning engine
 |   |   +-- browser.ts           # Playwright browser core
 |   |   +-- chrome-mcp.ts        # Chrome Native MCP adapter
 |   |   +-- relay.ts             # Extension Relay bridge
-|   +-- skills/                  # 15 tool modules
-|   |   +-- index.ts             # Skill registry + handleToolCall with meta
-|   |   +-- shell.ts             # PowerShell execution
-|   |   +-- files.ts             # File CRUD (per-path write lock)
-|   |   +-- python.ts            # Python script execution
-|   |   +-- vision.ts            # Vision analysis (browser_vision lock)
-|   |   +-- clipboard.ts         # System clipboard (exclusive lock)
-|   |   +-- memory.ts            # Long-term memory (read-write lock)
-|   |   +-- scheduler.ts         # Cron jobs (read-write lock)
-|   |   +-- browser.ts           # Triple-mode browser (browser_vision lock)
-|   |   +-- http.ts              # HTTP requests
-|   |   +-- network.ts           # Network diagnostics
-|   |   +-- process-manager.ts   # Process/service management
-|   |   +-- system-info.ts       # System diagnostics
-|   |   +-- pdf.ts               # PDF operations (per-path write lock)
-|   |   +-- imagegen.ts          # AI image generation
-|   |   +-- agent-spawn.ts       # Sub-agent worker spawning
+|   +-- skills/                  # 17 tool modules
+|   |   +-- index.ts             # Skill registry
+|   |   +-- org-skills.ts        # Org-specific tools (tickets, memory, delegate)
+|   |   +-- org-management-skill.ts # Human tools for org management
+|   |   +-- shell.ts / files.ts / etc. (15 base skills)
 |   +-- interfaces/
-|   |   +-- telegram.ts          # Telegram bot (uses telegramBrain)
+|   |   +-- telegram.ts          # Telegram bot
 |   +-- types/
 |       +-- skill.ts             # Skill + SkillMeta interfaces
 +-- dashboard/                   # React + Vite frontend (port 5173)
 |   +-- src/
-|       +-- App.tsx              # Main dashboard + sidebar
+|       +-- App.tsx              # Main dashboard + Sidebar + Tabs
 |       +-- components/
-|       |   +-- ChatWorkspace.tsx     # Multi-pane workspace (react-resizable-panels)
-|       |   +-- ConversationPane.tsx  # Individual chat pane
+|       |   +-- ChatWorkspace.tsx     # Human command center
+|       |   +-- OrgWorkspace.tsx      # Autonomous org dashboard
+|       |   +-- AgentCard.tsx         # Agent status & chat trigger
+|       |   +-- TicketBoard.tsx       # Kanban task board
+|       |   +-- AgentChatPane.tsx     # Direct persistent agent chat
 |       |   +-- WorkerCard.tsx        # Worker status card
-|       |   +-- ChatInput.tsx         # Input component
 |       +-- hooks/
-|       |   +-- useConversations.ts   # Conversation state management
-|       |   +-- useAgents.ts          # Worker agent state management
+|       |   +-- useConversations.ts   # Human chat state
+|       |   +-- useOrgs.ts            # Org & heartbeats state
+|       |   +-- useOrgChat.ts         # Persistent agent chat sessions
 |       +-- types/
-|           +-- conversation.ts       # Frontend type definitions
-+-- docs/                        # Project documentation
-+-- memory/                      # Persistent data (sessions, jobs, knowledge)
+|           +-- conversation.ts / org.ts
++-- docs/                        # Project documentation (v12 Plans, Guides)
++-- memory/                      # Persistent data
+|   +-- orgs/                    # Org configs, agents, tickets, memory
 +-- scripts/                     # Utility scripts
-+-- extension/                   # Chrome extension (relay)
-+-- .env                         # Environment variables
-+-- package.json                 # Node.js dependencies
-+-- tsconfig.json                # TypeScript configuration
++-- extension/                   # Chrome extension
 ```
 
 ## Key Technologies

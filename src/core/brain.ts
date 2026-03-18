@@ -277,7 +277,7 @@ ${Learner.buildContextBlock()}
 - If you hit the tool turn limit (25 rounds), summarize progress and outline remaining work.
 - Never call the same singleton-resource skill (browser, vision, clipboard) more than once in the same parallel tool batch.`;
 }
-import { SkillMeta } from '../types/skill.js';
+import { SkillMeta, Skill } from '../types/skill.js';
 
 // ─── Brain Config ────────────────────────────────────────────────────
 export interface BrainConfig {
@@ -285,6 +285,11 @@ export interface BrainConfig {
   conversationId: string;
   conversationLabel?: string;
   isWorker?: boolean;
+  // v12 additions
+  systemPromptOverride?: string;   // Full replacement for buildSystemPrompt()
+  historyDir?: string;             // Override directory for saveHistory() — FIX-H
+  orgId?: string;                  // Set on org agents for SkillMeta
+  orgAgentId?: string;
 }
 
 // Exclusive-lock skills that must not run in parallel within the same Brain
@@ -312,6 +317,10 @@ export class Brain {
   private isWorker: boolean;
   private aborted: boolean = false;
   private config: BrainConfig;
+
+  // v12 org fields
+  private extraSkills: Skill[] = [];
+  private toolFilter: ((name: string) => boolean) | null = null;
 
   constructor(config?: BrainConfig) {
     // Support legacy no-arg construction
@@ -362,6 +371,8 @@ export class Brain {
       conversationId: this.conversationId,
       conversationLabel: this.conversationLabel,
       isWorker: this.isWorker,
+      orgId: this.config.orgId,
+      orgAgentId: this.config.orgAgentId,
     };
   }
 
@@ -378,14 +389,26 @@ export class Brain {
         t.functionDeclarations[0].name !== 'spawn_agent'
       );
     }
+    // FIX-K: apply custom tool filter (e.g. remove manage_scheduler for org agents)
+    if (this.toolFilter) {
+      toolDefs = toolDefs.filter((t: any) =>
+        this.toolFilter!(t.functionDeclarations[0].name)
+      );
+    }
+    // Include any injected extra tools (e.g. org skills)
+    const extraDefs = this.extraSkills.map(s => ({
+      functionDeclarations: [{
+        name: s.name,
+        description: s.description,
+        parameters: s.parameters,
+      }],
+    }));
     const tools = [
       ...toolDefs,
+      ...extraDefs,
       ...chromeNativeAdapter.getGeminiToolDefs(),
     ];
-    return genAI.getGenerativeModel({
-      model: modelId,
-      tools: tools as any,
-    });
+    return genAI.getGenerativeModel({ model: modelId, tools: tools as any });
   }
 
   /**
@@ -396,6 +419,38 @@ export class Brain {
     this.model = this.createModel(this.activeModelId);
     this.chat = this.model.startChat({ history: this.history });
     console.log('[Brain] Model refreshed with updated tool definitions.');
+  }
+
+  /**
+   * Inject additional skills into this Brain instance at runtime.
+   * Used by org-agent-runner to add org-specific skills (org_create_ticket, etc.)
+   * Must be called before processMessage(). Refreshes the Gemini model tool definitions.
+   */
+  injectExtraTools(extraSkills: Skill[]): void {
+    this.extraSkills = extraSkills;
+    this.refreshModel();
+  }
+
+  /**
+   * Filter tools by name predicate. Called by org-agent-runner to remove
+   * manage_scheduler from org agent tool definitions (FIX-K).
+   * Must be called before injectExtraTools().
+   */
+  filterTools(predicate: (name: string) => boolean): void {
+    this.toolFilter = predicate;
+    this.refreshModel();
+  }
+
+  /**
+   * Update the system prompt override without resetting conversation history.
+   * Used by org-agent-runner to refresh latest memory/tickets between chat messages
+   * while preserving the full conversation context (FIX-I).
+   */
+  updateSystemPromptOverride(newPrompt: string): void {
+    if (this.history.length >= 1) {
+      this.history[0] = { role: 'user', parts: [{ text: newPrompt }] };
+      this.chat = this.model.startChat({ history: this.history });
+    }
   }
 
   // ─── Getters for external access ──────────────────────────────────
@@ -505,10 +560,11 @@ export class Brain {
   }
 
   private initSession() {
-    let systemPrompt = buildSystemPrompt();
+    // Org agents pass a full persona-injected prompt via systemPromptOverride
+    let systemPrompt = this.config.systemPromptOverride ?? buildSystemPrompt();
 
-    // Worker system prompt guardrail — prevents destructive operations by autonomous agents
-    if (this.isWorker) {
+    // Worker system prompt guardrail — only applied when no override is provided
+    if (this.isWorker && !this.config.systemPromptOverride) {
       systemPrompt += `\n\n---\n\nWORKER AGENT CONSTRAINTS:
 You are a sub-agent worker. Complete your assigned task and return the result.
 
@@ -524,14 +580,8 @@ need to do and ask the parent conversation to confirm before acting.`;
     }
 
     this.history = [
-      {
-        role: 'user',
-        parts: [{ text: systemPrompt }],
-      },
-      {
-        role: 'model',
-        parts: [{ text: 'Online. PersonalClaw v11 is ready. What do you need?' }],
-      },
+      { role: 'user', parts: [{ text: systemPrompt }] },
+      { role: 'model', parts: [{ text: 'Online. PersonalClaw v11 is ready. What do you need?' }] },
     ];
     this.turnCount = 0;
     this.startNewSession(this.history);
@@ -539,10 +589,13 @@ need to do and ask the parent conversation to confirm before acting.`;
 
   private saveHistory() {
     try {
-      if (!fs.existsSync(MEMORY_DIR)) {
-        fs.mkdirSync(MEMORY_DIR, { recursive: true });
+      // FIX-H: Use historyDir override for org agents so their session files
+      // write to memory/orgs/{orgId}/agents/{agentId}/ not the global memory/ dir
+      const dir = this.config.historyDir ?? MEMORY_DIR;
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
       }
-      const filePath = path.join(MEMORY_DIR, `${this.sessionId}.json`);
+      const filePath = path.join(dir, `${this.sessionId}.json`);
       fs.writeFileSync(filePath, JSON.stringify(this.history, null, 2));
     } catch (e) {
       console.error('[Brain] Failed to save history:', e);
@@ -1308,10 +1361,13 @@ need to do and ask the parent conversation to confirm before acting.`;
           // Abort check — allows kill() to cleanly stop in-flight workers
           if (this.aborted) throw new Error('Brain aborted');
 
-          // Route chrome_ prefixed tools to Chrome native MCP adapter
-          const output = chromeNativeAdapter.isChromeMCPTool(name)
-            ? await chromeNativeAdapter.executeChromeTool(name, args)
-            : await handleToolCall(name, args, meta);
+          // Check extra skills first (org skills, etc.), then Chrome MCP, then standard skills
+          const extraSkill = this.extraSkills.find(s => s.name === name);
+          const output = extraSkill
+            ? await extraSkill.run(args, meta)
+            : chromeNativeAdapter.isChromeMCPTool(name)
+              ? await chromeNativeAdapter.executeChromeTool(name, args)
+              : await handleToolCall(name, args, meta);
           const elapsed = Date.now() - startTime;
           console.log(`[Brain:${this.agentId}] ${name} completed in ${elapsed}ms`);
           toolCallsThisRequest++;
@@ -1410,7 +1466,12 @@ need to do and ask the parent conversation to confirm before acting.`;
     }, 'brain');
 
     // Queue conversation for background self-learning analysis
-    if (!message.startsWith('[INTERNAL_SCHEDULER]') && !message.startsWith('[DASHBOARD_IMAGE_UPLOAD]')) {
+    // FIX-J: also skip org agent heartbeat runs to prevent polluting personal learning profile
+    if (
+      !message.startsWith('[INTERNAL_SCHEDULER]') &&
+      !message.startsWith('[DASHBOARD_IMAGE_UPLOAD]') &&
+      !message.startsWith('[HEARTBEAT:')
+    ) {
       this.learner.queueAnalysis(this.history);
     }
 

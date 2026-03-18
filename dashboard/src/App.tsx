@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ChatInput from './components/ChatInput';
 import { ChatWorkspace } from './components/ChatWorkspace';
+import { OrgWorkspace } from './components/OrgWorkspace';
 
 import { io, Socket } from 'socket.io-client';
 import {
@@ -29,6 +30,7 @@ import {
   Settings,
   Sparkles,
   ArrowUp,
+  Building2,
 } from 'lucide-react';
 
 import { motion, AnimatePresence } from 'framer-motion';
@@ -58,7 +60,7 @@ interface SkillInfo {
   description: string;
 }
 
-type TabType = 'command' | 'metrics' | 'activity' | 'skills';
+type TabType = 'command' | 'metrics' | 'activity' | 'skills' | 'orgs';
 
 const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([
@@ -143,6 +145,14 @@ const App: React.FC = () => {
     newSocket.on('activity', (item: ActivityItem) => {
       setActivityFeed(prev => [...prev.slice(-49), item]);
     });
+
+    const handleOrgNotification = (data: any) => {
+      addToast(
+        `[${data.orgName}] ${data.agentName}: ${data.message}`,
+        data.level === 'error' ? 'error' : data.level === 'success' ? 'success' : 'info'
+      );
+    };
+    newSocket.on('org:notification', handleOrgNotification);
 
     return () => {
       newSocket.close();
@@ -335,6 +345,10 @@ const App: React.FC = () => {
             <li className={`nav-item ${activeTab === 'skills' ? 'active' : ''}`} onClick={() => setActiveTab('skills')}>
               <Settings size={18} />
               <span>Skills & Config</span>
+            </li>
+            <li className={`nav-item ${activeTab === 'orgs' ? 'active' : ''}`} onClick={() => setActiveTab('orgs')} title="AI Organisations">
+              <Building2 size={18} />
+              <span>Orgs</span>
             </li>
           </ul>
         </nav>
@@ -542,6 +556,19 @@ const App: React.FC = () => {
                     </button>
                   ))}
                 </div>
+              </motion.div>
+            )}
+
+            {/* ── AI Organisations ── */}
+            {activeTab === 'orgs' && socket && (
+              <motion.div
+                key="orgs"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                style={{ flex: 1, display: 'flex', overflow: 'hidden' }}
+              >
+                <OrgWorkspace socket={socket} />
               </motion.div>
             )}
           </AnimatePresence>

@@ -16,6 +16,10 @@ import { agentRegistry } from './core/agent-registry.js';
 import { skillLock } from './core/skill-lock.js';
 // FIX-3: telegramBrain imported from neutral file, not declared here
 import { telegramBrain } from './core/telegram-brain.js';
+import { orgManager } from './core/org-manager.js';
+import { orgHeartbeat } from './core/org-heartbeat.js';
+import { orgTaskBoard } from './core/org-task-board.js';
+import { runOrgAgent, isAgentRunning, closeChatSession, getAllOrgConversationIds } from './core/org-agent-runner.js';
 
 dotenv.config();
 
@@ -31,7 +35,7 @@ app.use('/outputs', express.static(path.join(process.cwd(), 'outputs')));
 app.use('/screenshots', express.static(path.join(process.cwd(), 'screenshots')));
 
 // ─── Core Initialization ────────────────────────────────────────────
-console.log('[Server] Initializing PersonalClaw v11...');
+console.log('[Server] Initializing PersonalClaw v12...');
 
 console.log('[Server] Checking Telegram configuration...');
 const telegram = new TelegramInterface();
@@ -53,6 +57,9 @@ initScheduler(async (msg) => {
     return `Error: ${error}`;
   }
 });
+
+console.log('[Server] Starting Org Heartbeat Engine...');
+orgHeartbeat.startAll();
 
 const PORT = process.env.PORT || 3000;
 
@@ -104,6 +111,21 @@ function formatActivitySummary(event: any): string {
     case Events.CONVERSATION_CREATED: return `Conversation created: ${event.data?.label || ''}`;
     case Events.CONVERSATION_CLOSED: return `Conversation closed: ${event.data?.label || ''}`;
     case Events.CONVERSATION_ABORTED: return `Conversation aborted: ${event.data?.label || ''}`;
+    case Events.ORG_CREATED: return `Org created: ${event.data?.org?.name}`;
+    case Events.ORG_DELETED: return `Org deleted: ${event.data?.name}`;
+    case Events.ORG_PAUSED: return `Org paused: ${event.data?.org?.name}`;
+    case Events.ORG_RESUMED: return `Org resumed: ${event.data?.org?.name}`;
+    case Events.ORG_AGENT_CREATED: return `Agent created: ${event.data?.agent?.name} (${event.data?.agent?.role})`;
+    case Events.ORG_AGENT_PAUSED: return `Agent paused: ${event.data?.agent?.name}`;
+    case Events.ORG_AGENT_RESUMED: return `Agent resumed: ${event.data?.agent?.name}`;
+    case Events.ORG_AGENT_HEARTBEAT_FIRED: return `Heartbeat: ${event.data?.agentName} woke up (${event.data?.trigger})`;
+    case Events.ORG_AGENT_HEARTBEAT_SKIPPED: return `Heartbeat skipped: ${event.data?.agentId} still running`;
+    case Events.ORG_AGENT_RUN_STARTED: return `Agent run started: ${event.data?.agentName} (${event.data?.role})`;
+    case Events.ORG_AGENT_RUN_COMPLETED: return `Agent run completed: ${event.data?.agentName} in ${event.data?.durationMs}ms`;
+    case Events.ORG_AGENT_RUN_FAILED: return `Agent run failed: ${event.data?.agentId} — ${event.data?.error}`;
+    case Events.ORG_TICKET_CREATED: return `Ticket created: ${event.data?.ticket?.title}`;
+    case Events.ORG_TICKET_UPDATED: return `Ticket updated: ${event.data?.ticket?.title}`;
+    case 'org:notification': return `[${event.data?.orgName}] ${event.data?.agentName}: ${event.data?.message}`;
     default: return event.type;
   }
 }
@@ -150,6 +172,37 @@ eventBus.on('agent:worker_failed', pushWorkerUpdate);
 eventBus.on('agent:worker_timed_out', pushWorkerUpdate);
 eventBus.on('agent:worker_queued', pushWorkerUpdate);
 
+// Push org notifications as toasts to dashboard
+eventBus.on('org:notification', (event: any) => {
+  io.emit('org:notification', event.data ?? event);
+});
+
+// Push org agent run status updates
+eventBus.on(Events.ORG_AGENT_RUN_STARTED, (event: any) => {
+  const data = event.data ?? event;
+  io.emit('org:agent:run_update', { ...data, running: true });
+});
+eventBus.on(Events.ORG_AGENT_RUN_COMPLETED, (event: any) => {
+  const data = event.data ?? event;
+  io.emit('org:agent:run_update', { ...data, running: false });
+  const org = orgManager.get(data.orgId);
+  if (org) io.emit('org:updated', org);
+});
+eventBus.on(Events.ORG_AGENT_RUN_FAILED, (event: any) => {
+  const data = event.data ?? event;
+  io.emit('org:agent:run_update', { ...data, running: false, failed: true });
+  const org = orgManager.get(data.orgId);
+  if (org) io.emit('org:updated', org);
+});
+
+// Push ticket board updates
+eventBus.on(Events.ORG_TICKET_CREATED, (event: any) => {
+  io.emit('org:ticket:update', { orgId: (event.data ?? event).ticket.orgId });
+});
+eventBus.on(Events.ORG_TICKET_UPDATED, (event: any) => {
+  io.emit('org:ticket:update', { orgId: (event.data ?? event).ticket.orgId });
+});
+
 // ─── System Metrics Broadcaster ─────────────────────────────────────
 let cachedMetrics = { cpu: 0, ram: '0', totalRam: '0', disk: '0', totalDisk: '0' };
 
@@ -182,13 +235,13 @@ io.on('connection', (socket) => {
   console.log(`[Server] Dashboard connected: ${socket.id}`);
   eventBus.dispatch(Events.DASHBOARD_CONNECTED, { socketId: socket.id }, 'server');
 
-  // Send initial state
   socket.emit('init', {
-    version: '11.0.0',
+    version: '12.0.0',
     skills: skills.map(s => ({ name: s.name, description: s.description.split('\n')[0] })),
     metrics: cachedMetrics,
     activity: activityBuffer.slice(-20),
     conversations: conversationManager.list(),
+    orgs: orgManager.list(), // v12 addition
   });
 
   // ── Multi-chat message handler ──
@@ -279,6 +332,155 @@ io.on('connection', (socket) => {
     });
   });
 
+  // ── Org list & lifecycle ──
+  socket.on('org:list', () => {
+    socket.emit('org:list', orgManager.list());
+  });
+
+  socket.on('org:create', (params: { name: string; mission: string; rootDir: string }) => {
+    try {
+      const org = orgManager.create(params);
+      io.emit('org:created', org);
+    } catch (err: any) {
+      socket.emit('org:error', { message: err.message });
+    }
+  });
+
+  socket.on('org:update', (params: { orgId: string; updates: any }) => {
+    try {
+      const org = orgManager.update(params.orgId, params.updates);
+      io.emit('org:updated', org);
+    } catch (err: any) {
+      socket.emit('org:error', { message: err.message });
+    }
+  });
+
+  socket.on('org:delete', (params: { orgId: string }) => {
+    try {
+      orgManager.delete(params.orgId);
+      io.emit('org:deleted', { orgId: params.orgId });
+    } catch (err: any) {
+      socket.emit('org:error', { message: err.message });
+    }
+  });
+
+  // ── Agent management ──
+  socket.on('org:agent:create', (params: { orgId: string; agent: any }) => {
+    try {
+      const agent = orgManager.addAgent(params.orgId, params.agent);
+      orgHeartbeat.scheduleAgent(params.orgId, agent.id);
+      io.emit('org:updated', orgManager.get(params.orgId));
+    } catch (err: any) {
+      socket.emit('org:error', { message: err.message });
+    }
+  });
+
+  socket.on('org:agent:update', (params: { orgId: string; agentId: string; updates: any }) => {
+    try {
+      orgManager.updateAgent(params.orgId, params.agentId, params.updates);
+      io.emit('org:updated', orgManager.get(params.orgId));
+    } catch (err: any) {
+      socket.emit('org:error', { message: err.message });
+    }
+  });
+
+  socket.on('org:agent:delete', (params: { orgId: string; agentId: string }) => {
+    try {
+      orgManager.deleteAgent(params.orgId, params.agentId);
+      io.emit('org:updated', orgManager.get(params.orgId));
+    } catch (err: any) {
+      socket.emit('org:error', { message: err.message });
+    }
+  });
+
+  socket.on('org:agent:trigger', async (params: { orgId: string; agentId: string }) => {
+    try {
+      await orgHeartbeat.triggerAgent(params.orgId, params.agentId, 'manual');
+    } catch (err: any) {
+      socket.emit('org:error', { message: err.message });
+    }
+  });
+
+  // ── Direct agent chat (FIX-I: persistent Brain per chatId) ──
+  socket.on('org:agent:message', async (params: {
+    orgId: string; agentId: string; chatId: string; text: string;
+  }) => {
+    const { orgId, agentId, chatId, text } = params;
+    try {
+      socket.emit('org:agent:thinking', { chatId, agentId });
+      const result = await runOrgAgent(orgId, agentId, 'chat', text, chatId);
+      socket.emit('org:agent:response', { chatId, agentId, text: result.response });
+    } catch (err: any) {
+      socket.emit('org:agent:response', {
+        chatId, agentId, text: `Error: ${err.message}`, isError: true,
+      });
+    }
+  });
+
+  // FIX-I: Clean up persistent chat Brain when pane is closed
+  socket.on('org:agent:chat:close', (params: { chatId: string }) => {
+    closeChatSession(params.chatId);
+  });
+
+  // ── Ticket management ──
+  socket.on('org:tickets:list', (params: { orgId: string; filter?: any }) => {
+    const tickets = orgTaskBoard.list(params.orgId, params.filter);
+    socket.emit('org:tickets:list', { orgId: params.orgId, tickets });
+  });
+
+  socket.on('org:ticket:create', async (params: { orgId: string; ticket: any }) => {
+    try {
+      const ticket = await orgTaskBoard.create({
+        ...params.ticket,
+        orgId: params.orgId,
+        isHumanCreated: true,
+        createdBy: 'human',
+        createdByLabel: 'You',
+      });
+      io.emit('org:ticket:update', { orgId: params.orgId });
+      socket.emit('org:ticket:created', ticket);
+    } catch (err: any) {
+      socket.emit('org:error', { message: err.message });
+    }
+  });
+
+  socket.on('org:ticket:update', async (params: { orgId: string; ticketId: string; updates: any }) => {
+    try {
+      await orgTaskBoard.update(params.orgId, params.ticketId, {
+        ...params.updates,
+        byLabel: 'You',
+        callerAgentId: 'human',
+      });
+      io.emit('org:ticket:update', { orgId: params.orgId });
+    } catch (err: any) {
+      socket.emit('org:error', { message: err.message });
+    }
+  });
+
+  // ── Org activity log ──
+  socket.on('org:activity', (params: { orgId: string; count?: number }) => {
+    const org = orgManager.get(params.orgId);
+    const filtered = activityBuffer
+      .filter(a => a.type?.startsWith('org:') || a.summary?.includes(org?.name ?? '__never__'))
+      .slice(-(params.count ?? 50));
+    socket.emit('org:activity', { orgId: params.orgId, items: filtered });
+  });
+
+  // ── Org memory viewer (FIX-O: correlationId for response matching) ──
+  socket.on('org:memory:read', (params: { orgId: string; agentId?: string; correlationId: string }) => {
+    try {
+      const { orgId, agentId, correlationId } = params;
+      const file = agentId
+        ? orgManager.getAgentMemoryFile(orgId, agentId)
+        : orgManager.getSharedMemoryFile(orgId);
+      const content = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf-8')) : null;
+      // FIX-O: include correlationId so frontend matches response to the correct request
+      socket.emit('org:memory:content', { orgId, agentId, content, correlationId });
+    } catch (err: any) {
+      socket.emit('org:error', { message: err.message });
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log(`[Server] Dashboard disconnected: ${socket.id}`);
     eventBus.dispatch(Events.DASHBOARD_DISCONNECTED, { socketId: socket.id }, 'server');
@@ -291,7 +493,7 @@ io.on('connection', (socket) => {
 app.get('/status', (req, res) => {
   res.json({
     status: 'Online',
-    version: '11.0.0',
+    version: '12.0.0',
     system: 'PersonalClaw',
     skills: skills.length,
     conversations: conversationManager.list().length,
@@ -388,11 +590,78 @@ app.get('/api/activity', (req, res) => {
   res.json(activityBuffer.slice(-count));
 });
 
+// Org CRUD
+app.get('/api/orgs', (_req, res) => res.json(orgManager.list()));
+app.post('/api/orgs', (req, res) => {
+  try { res.json(orgManager.create(req.body)); }
+  catch (err: any) { res.status(400).json({ error: err.message }); }
+});
+app.put('/api/orgs/:id', (req, res) => {
+  try { res.json(orgManager.update(req.params.id, req.body)); }
+  catch (err: any) { res.status(400).json({ error: err.message }); }
+});
+app.delete('/api/orgs/:id', (req, res) => {
+  try { orgManager.delete(req.params.id); res.json({ success: true }); }
+  catch (err: any) { res.status(400).json({ error: err.message }); }
+});
+
+// Agent CRUD
+app.post('/api/orgs/:id/agents', (req, res) => {
+  try {
+    const agent = orgManager.addAgent(req.params.id, req.body);
+    orgHeartbeat.scheduleAgent(req.params.id, agent.id);
+    res.json(agent);
+  } catch (err: any) { res.status(400).json({ error: err.message }); }
+});
+app.put('/api/orgs/:orgId/agents/:agentId', (req, res) => {
+  try { res.json(orgManager.updateAgent(req.params.orgId, req.params.agentId, req.body)); }
+  catch (err: any) { res.status(400).json({ error: err.message }); }
+});
+app.delete('/api/orgs/:orgId/agents/:agentId', (req, res) => {
+  try { orgManager.deleteAgent(req.params.orgId, req.params.agentId); res.json({ success: true }); }
+  catch (err: any) { res.status(400).json({ error: err.message }); }
+});
+app.post('/api/orgs/:orgId/agents/:agentId/trigger', async (req, res) => {
+  try {
+    await orgHeartbeat.triggerAgent(req.params.orgId, req.params.agentId, 'manual');
+    res.json({ success: true });
+  } catch (err: any) { res.status(400).json({ error: err.message }); }
+});
+
+// Tickets
+app.get('/api/orgs/:id/tickets', (req, res) => res.json(orgTaskBoard.list(req.params.id)));
+app.post('/api/orgs/:id/tickets', async (req, res) => {
+  try {
+    const ticket = await orgTaskBoard.create({
+      ...req.body, orgId: req.params.id, isHumanCreated: true,
+      createdBy: 'human', createdByLabel: 'You',
+    });
+    res.json(ticket);
+  } catch (err: any) { res.status(400).json({ error: err.message }); }
+});
+app.put('/api/orgs/:orgId/tickets/:ticketId', async (req, res) => {
+  try {
+    const ticket = await orgTaskBoard.update(req.params.orgId, req.params.ticketId, {
+      ...req.body, byLabel: 'You', callerAgentId: 'human',
+    });
+    res.json(ticket);
+  } catch (err: any) { res.status(400).json({ error: err.message }); }
+});
+
 // ─── Graceful Shutdown ──────────────────────────────────────────────
 const shutdown = async (signal: string) => {
   console.log(`\n[Server] ${signal} received. Shutting down gracefully...`);
 
   eventBus.dispatch(Events.SERVER_SHUTDOWN, { signal }, 'server');
+
+  // FIX-G: Stop all org heartbeat cron tasks before anything else
+  orgHeartbeat.stopAll();
+
+  // FIX-M: Kill all workers spawned by org agents (their conversationIds are
+  // not known to conversationManager, so we handle them explicitly here)
+  for (const convId of getAllOrgConversationIds()) {
+    agentRegistry.killAll(convId);
+  }
 
   // Save all open conversations
   await conversationManager.closeAll();
@@ -447,7 +716,7 @@ server.listen(PORT, () => {
   const startupInfo = [
     '',
     '  ╔══════════════════════════════════════════╗',
-    '  ║       PersonalClaw v11.0  — Online       ║',
+    '  ║       PersonalClaw v12.0  — Online       ║',
     '  ╠══════════════════════════════════════════╣',
     `  ║  Backend:    http://localhost:${PORT}        ║`,
     '  ║  Dashboard:  http://localhost:5173       ║',
@@ -456,6 +725,9 @@ server.listen(PORT, () => {
     '  ║  REST API:   /api/chat, /api/skills      ║',
     '  ║  Multi-Chat: Up to 3 panes              ║',
     '  ║  Sub-Agents: Up to 5 per pane           ║',
+    '  ╠══════════════════════════════════════════╣',
+    `  ║  Orgs:       ${String(orgManager.list().length).padEnd(27)}║`,
+    '  ║  Org API:    /api/orgs, /api/orgs/:id   ║',
     '  ╚══════════════════════════════════════════╝',
     '',
   ];

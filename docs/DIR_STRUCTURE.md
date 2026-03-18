@@ -8,13 +8,13 @@ PersonalClaw is a local-first AI automation platform for Windows, integrating Ge
 ## Major Directory Descriptions
 
 - `/src`: Backend implementation in TypeScript (Node.js/Express).
-- `/src/core`: Fundamental systems like the Brain, Event Bus, Session Management, and Agent Registry.
-- `/src/skills`: Individual tool modules (e.g., shell, files, browser, vision) that the AI can execute.
-- `/dashboard`: Frontend React + Vite application for interacting with the AI.
-- `/docs`: Project documentation, implementation plans, and architectural guides.
+- `/src/core`: Fundamental systems like the Brain, Event Bus, Session Management, Agent Registry, and the **v12 Org Orchestration** core (`org-manager.ts`, `org-heartbeat.ts`, `org-task-board.ts`, `org-agent-runner.ts`).
+- `/src/skills`: Individual tool modules (e.g., shell, files, browser, vision, **org-skills**, **org-management**) that the AI can execute.
+- `/dashboard`: Frontend React + Vite application for interacting with the AI, including the **v12 Org Workspace**.
+- `/docs`: Project documentation, implementation plans, and architectural guides (v12 Plan).
 - `/extension`: Chrome extension for relaying data to the backend.
 - `/scripts`: Utility scripts for automation and setup.
-- `/memory`: (Hidden/Local) Persistent data including sessions and knowledge (usually excluded from version control).
+- `/memory`: (Hidden/Local) Persistent data including sessions, knowledge, and **v12 Org data** (`memory/orgs/`).
 
 ---
 
@@ -29,15 +29,22 @@ PersonalClaw/
 │   │   ├── assets
 │   │   │   └── react.svg
 │   │   ├── components
+│   │   │   ├── AgentCard.tsx
+│   │   │   ├── AgentChatPane.tsx
 │   │   │   ├── ChatInput.tsx
 │   │   │   ├── ChatWorkspace.tsx
-│   │   │   ├── ConversationPane.tsx
+│   │   │   ├── CreateAgentModal.tsx
+│   │   │   ├── CreateOrgModal.tsx
+│   │   │   ├── OrgWorkspace.tsx
+│   │   │   ├── TicketBoard.tsx
 │   │   │   └── WorkerCard.tsx
 │   │   ├── hooks
-│   │   │   ├── useAgents.ts
+│   │   │   ├── useOrgs.ts
+│   │   │   ├── useOrgChat.ts
 │   │   │   └── useConversations.ts
 │   │   ├── types
-│   │   │   └── conversation.ts
+│   │   │   ├── conversation.ts
+│   │   │   └── org.ts
 │   │   ├── App.css
 │   │   ├── App.tsx
 │   │   ├── index.css
@@ -57,17 +64,14 @@ PersonalClaw/
 │   │   └── logo.png
 │   ├── codebase_documentation.md
 │   ├── codebase_snapshot.md
-│   ├── implementation_plan.md
-│   ├── PER-6_ROADMAP.md
 │   ├── PersonalClaw_v11_Implementation_Plan_FINAL.md
+│   ├── PersonalClaw_v12_Implementation_Plan_FINAL_v2.md
 │   ├── SETUP_GUIDE.md
 │   ├── USER_GUIDE.md
 │   ├── V10_FEATURES.md
 │   ├── version_log.md
 │   └── walkthrough.md
 ├── exports
-│   ├── session_export_2026-03-15T21-12-55-663Z.json
-│   └── session_export_2026-03-16T19-11-11-500Z.json
 ├── extension
 │   ├── background.js
 │   ├── content.js
@@ -87,6 +91,10 @@ PersonalClaw/
 │   │   ├── events.ts
 │   │   ├── learner.ts
 │   │   ├── mcp.ts
+│   │   ├── org-agent-runner.ts
+│   │   ├── org-heartbeat.ts
+│   │   ├── org-manager.ts
+│   │   ├── org-task-board.ts
 │   │   ├── relay.ts
 │   │   ├── sessions.ts
 │   │   ├── skill-lock.ts
@@ -103,6 +111,8 @@ PersonalClaw/
 │   │   ├── index.ts
 │   │   ├── memory.ts
 │   │   ├── network.ts
+│   │   ├── org-management-skill.ts
+│   │   ├── org-skills.ts
 │   │   ├── pdf.ts
 │   │   ├── process-manager.ts
 │   │   ├── python.ts
@@ -124,5 +134,4 @@ PersonalClaw/
 ├── setup.bat
 ├── start.bat
 └── tsconfig.json
-
-```
+````

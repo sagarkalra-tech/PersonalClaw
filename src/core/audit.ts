@@ -122,7 +122,6 @@ class AuditLogger {
     try {
       const entries: AuditEntry[] = [];
 
-      // Read from current file
       if (fs.existsSync(this.currentFile)) {
         const lines = fs.readFileSync(this.currentFile, 'utf8').split('\n').filter(Boolean);
         for (const line of lines) {

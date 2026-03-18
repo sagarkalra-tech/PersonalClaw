@@ -1,49 +1,50 @@
-# PersonalClaw v11.1 🛸
+# PersonalClaw v12.0 🛸
 
 **The next-generation Windows AI agent. Local. Private. Unstoppable.**
 
 PersonalClaw is a sophisticated, locally-hosted AI agent that combines Google Gemini with full system access, autonomous task execution, and intelligent learning. It's your digital hands—capable of system administration, automation, analytics, and real-time decision-making.
 
-![PersonalClaw v11](docs/assets/logo.png)
+![PersonalClaw v12](docs/assets/logo.png)
 
 **Developed by Sagar Kalra**
 
 ---
 
-## ✨ v11.1 — Multi-Agent Architecture
+## ✨ v12.0 — Autonomous AI Company Orchestration (NEW)
 
-### 🚀 One-Click Setup & Run (NEW)
-- **`setup.bat`** — Automated, modular installation. Skip what you don't need (Telegram, Dashboard, etc.).
-- **`start.bat`** — Launches the backend and dashboard in separate, dedicated terminals automatically.
+### 🏢 AI Organisations
+- **Create up to 10 independent AI companies** with unique names, missions, and root directories.
+- **Org Isolation** — Each organisation operates in its own workspace with no cross-org data pollution.
+- **Persistence** — All org data, agent memories, and shared company state saved to `memory/orgs/`.
 
-### 🧩 Multi-Chat Workspace (3 Panes)
-- **Up to 3 independent chat panes** — each with its own isolated Brain instance
-- **Resizable panels** — drag to resize, auto-numbered Chat 1 / Chat 2 / Chat 3
-- **Auto-save on close** — conversation history persisted to SessionManager
-- **`+` button** to open new panes, `x` to close (reuses labels)
+### 👥 Professional Agent Personas
+- **Custom Roles** — Define any role (CEO, CTO, Lead Dev, Marketing, etc.).
+- **Rich Identity** — Every agent has a dedicated name, personality, responsibilities, and specific goals.
+- **Autonomous Memory** — Agents maintain persistent memory across runs, learning from their own past actions.
+- **Shared Memory** — A company-wide context board visible to all agents in the organisation.
 
-### 🤖 Sub-Agent Workers (5 per Pane)
-- **`spawn_agent` skill** — primary brains spawn parallel workers for independent tasks
-- **Worker constraints** — no history, no further spawning, destructive-ops guardrail
-- **Real-time status** — queued / running / waiting_for_lock / completed / failed / timed_out
-- **Collapsible side panel** — auto-opens on worker activity, closes after completion
-- **Superuser mode (Ctrl+Shift+D)** — raw log viewer on completed worker cards
+### 💓 Heartbeat & Trigger Engine
+- **Cron Scheduling** — Set precise execution times for any agent (e.g., "Daily at 9 AM", "Every 15 minutes").
+- **Event-Driven Workflows** — Delegation automatically triggers heartbeats for target agents.
+- **Manual Control** — Trigger any agent run instantly from the dashboard or chat.
+- **Skip-if-Running** — Smart concurrency protection ensures heartbeats never stack or overlap.
 
-### 🔒 Skill Lock System
-- **Exclusive locks** — `browser` + `vision` share `browser_vision` lock; `clipboard` exclusive
-- **Read-write locks** — `memory`, `scheduler` allow concurrent reads, exclusive writes
-- **Per-path locks** — `files` and `pdf` lock by output file path
-- **Lock UI** — `waiting_for_lock` status with amber indicator showing holder info
-- **`GET /api/locks`** — inspect current lock state
+### 📋 Enterprise Ticket System
+- **Kanban Task Board** — Manage work via Open → In Progress → Blocked → Done status.
+- **Agentic Delegation** — Agents can create, update, and assign tickets to each other or to you.
+- **Rich Context** — Each ticket includes descriptions, priority levels, comments, and full history trails.
+- **Write-Lock Protection** — Concurrent agent access is safe from data corruption.
 
-### 🏗️ Infrastructure
-- **Brain refactored** — singleton to instantiable class with `BrainConfig`
-- **`SkillMeta`** passed to every skill (agentId, conversationId, conversationLabel, isWorker)
-- **Telegram Brain** — isolated instance, outside conversation manager
-- **15 skills** — 14 original + `spawn_agent`
-- **6 new REST endpoints** + 5 new socket events + 12 Event Bus constants
-- **Tool streaming** re-wired via Event Bus
-- **Graceful shutdown** saves all open conversations
+### 💬 Direct Agent Chat
+- **Instant Communication** — Click any agent to open a dedicated, persistent chat session.
+- **Separate Workspace** — Direct-chat panes are independent of the 3-pane human command center.
+- **Persistent Sessions** — The agent retains full context of your direct conversation between messages.
+
+### 🧩 Previous (v11.1) Improvements
+- **Multi-Chat Workspace** — Up to 3 independent resizable panes for human commands.
+- **Sub-Agent Workers** — Spawn up to 5 parallel workers per pane for background tasks.
+- **Skill Lock System** — Global concurrent resource protection (Exclusive/Read-Write/Per-Path).
+- **Graceful Shutdown** — Cleanly stops all heartbeats and saves all sessions before exit.
 
 ### 📊 Previous (v10) Features Still Included
 - Event Bus, Audit Logger, Session Manager, REST API
@@ -143,15 +144,16 @@ Open [http://localhost:5173](http://localhost:5173) (The batch file will launch 
 
 ---
 
-## 📊 Stats
+## 📊 Latest Stats
 
 | Metric | Value |
 |--------|-------|
-| **Skills** | 14 |
-| **Commands** | 23 |
-| **Models** | 5 (with failover) |
-| **Max Tokens** | 1M |
-| **Auto-Compact** | 800k |
+| **Core Skills** | 15 |
+| **Org Skills** | 2 |
+| **Total Skills** | 17 |
+| **Max Orgs** | 10 |
+| **Max human panes** | 3 |
+| **Max workers/pane** | 5 |
 | **Build Status** | ✅ Clean |
 
 ---

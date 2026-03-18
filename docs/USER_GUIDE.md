@@ -1,39 +1,56 @@
-# PersonalClaw v11.0: End-User Guide 🛸
+# PersonalClaw v12.0: End-User Guide 🛸
 **Developed by Sagar Kalra**
 
 ![PersonalClaw Logo](assets/logo.png)
 
-Welcome to **PersonalClaw v11.0**, your next-generation AI agent for Windows. This guide teaches you to leverage its full power.
-
----
-
-## 🌟 What is PersonalClaw?
-
-PersonalClaw is a sophisticated, locally-hosted AI agent powered by **Google Gemini** with intelligent failover. It gives you AI-powered control over your Windows machine via:
-
-- **Web Dashboard** — Real-time chat, system metrics, activity feed, command palette
-- **Telegram Bot** — Control from anywhere securely
-- **REST API** — External integrations
+Welcome to **PersonalClaw v12.0**, your next-generation AI agent for Windows. This version introduces **Autonomous AI Organisations**, allowing you to orchestrate entire teams of AI agents.
 
 ---
 
 ## ⚡ How to Start
-To launch the PersonalClaw system, you need to run two separate commands in different terminal windows:
 
-1. **The Brain**: In the project root, run:
-   ```bash
-   npm run dev
-   ```
-2. **The Dashboard**: Navigate to the `dashboard` folder and run:
-   ```bash
-   npm run dev
-   ```
-3. **Persistence Mode**: For absolute stability (prevents browsers from closing during code changes):
-   ```bash
-   npm run dev:persist
-   ```
+The fastest way to launch PersonalClaw is using the included batch files:
 
-Wait a few seconds for both to initialize, then head to [http://localhost:5173](http://localhost:5173)!
+1. **Setup**: Run `setup.bat` once to install dependencies and configure your API key.
+2. **Launch**: Run `start.bat`. This will automatically:
+   - Start the Backend server (port 3000)
+   - Start the Dashboard frontend (port 5173)
+   - Open your browser to the dashboard.
+
+Alternatively, you can run `npm run all` in a single terminal.
+
+Wait a few seconds for initialization, then head to [http://localhost:5173](http://localhost:5173)!
+
+---
+
+## 🏢 AI Organisation System (NEW in v12)
+
+PersonalClaw now supports creating autonomous AI companies that work on your projects without constant human intervention.
+
+### 1. Creating an Organisation
+- Click the **Organisations** tab in the sidebar.
+- Click **Add Organisation** to define a new company.
+- **Mission**: Tell the org what its ultimate goal is.
+- **Root Directory**: Point the org to a real folder on your disk. This is where the agents will work.
+
+### 2. Building Your Team
+Once an org is created, you can add multiple AI agents with specialized roles:
+- **Role & Personality**: Define a CEO, a lead developer, a copywriter, etc.
+- **Responsibilities**: List exactly what this agent is in charge of.
+- **Autonomy**: Set whether the agent can act freely (**Full**) or needs your consent (**Approval Required**).
+- **Heartbeat (Cron)**: Set a schedule for the agent to wake up and work (e.g., "Every 30 minutes" or "Every Monday at 9 AM").
+
+### 3. The Ticket Board (Kanban)
+Each organisation comes with a built-in task management system:
+- **Agents Assign Work**: Agents can create and assign tickets to each other (or to you!).
+- **Status Tracking**: Move tasks between **Open**, **In Progress**, **Blocked**, and **Done**.
+- **Agent Collaboration**: Agents check the ticket board on every run to see what needs doing.
+
+### 4. Direct Agent Chat
+Need to talk to a specific agent privately?
+- Click the **💬 Chat** icon on any agent card in the Org Workspace.
+- This opens a persistent, dedicated chat pane with just that agent.
+- Unlike the main command center, these agents remember who they are (CEO/Dev) and what they've been doing.
 
 ---
 
@@ -58,8 +75,8 @@ Wait a few seconds for both to initialize, then head to [http://localhost:5173](
   - **Capabilities**: Full DOM interaction (click, type, scrape with links & forms), tab management, screenshots, JavaScript execution, scroll control, interactive element listing.
 - **Native Chrome Mode (v10.2)**: Connect to your **real running Chrome** via CDP or Chrome MCP.
   - **Quick connect**: `/chrome` command or ask the agent to connect.
-  - **Requires**: Chrome launched with `--remote-debugging-port=9222`, or Chrome 146+ with remote debugging enabled in `chrome://inspect/#remote-debugging`.
-  - **Chrome 146+**: Automatically enables Chrome's native MCP server, giving the AI direct access to Chrome DevTools tools.
+- **Requires**: Chrome launched with `--remote-debugging-port=9222`, or Chrome 146+ with remote debugging enabled in `chrome://inspect/#remote-debugging`.
+- **Chrome 146+**: Automatically enables Chrome's native MCP server, giving the AI direct access to Chrome DevTools tools.
 
 ---
 

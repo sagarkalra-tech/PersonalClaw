@@ -20,7 +20,9 @@ class EventBus extends EventEmitter {
 
   constructor() {
     super();
-    this.setMaxListeners(50);
+    // FIX-P: bumped from 50 to 100 — v12 adds org heartbeat, per-agent, and
+    // per-org task board subscriptions that exceed 50 under load with multiple orgs.
+    this.setMaxListeners(100);
   }
 
   /**
@@ -128,5 +130,40 @@ export const Events = {
   SKILL_LOCK_ACQUIRED: 'skill:lock_acquired',
   SKILL_LOCK_RELEASED: 'skill:lock_released',
   SKILL_LOCK_QUEUED: 'skill:lock_queued',
+
+  // ─── v12 Org Events ────────────────────────────────────────────────
+
+  // Org lifecycle
+  ORG_CREATED: 'org:created',
+  ORG_UPDATED: 'org:updated',
+  ORG_DELETED: 'org:deleted',
+  ORG_PAUSED: 'org:paused',
+  ORG_RESUMED: 'org:resumed',
+
+  // Agent lifecycle
+  ORG_AGENT_CREATED: 'org:agent:created',
+  ORG_AGENT_UPDATED: 'org:agent:updated',
+  ORG_AGENT_DELETED: 'org:agent:deleted',
+  ORG_AGENT_PAUSED: 'org:agent:paused',
+  ORG_AGENT_RESUMED: 'org:agent:resumed',
+
+  // Agent runs
+  ORG_AGENT_HEARTBEAT_FIRED: 'org:agent:heartbeat_fired',
+  ORG_AGENT_HEARTBEAT_SKIPPED: 'org:agent:heartbeat_skipped',
+  ORG_AGENT_RUN_STARTED: 'org:agent:run_started',
+  ORG_AGENT_RUN_COMPLETED: 'org:agent:run_completed',
+  ORG_AGENT_RUN_FAILED: 'org:agent:run_failed',
+
+  // Tickets
+  ORG_TICKET_CREATED: 'org:ticket:created',
+  ORG_TICKET_UPDATED: 'org:ticket:updated',
+  ORG_TICKET_ASSIGNED: 'org:ticket:assigned',
+  ORG_TICKET_COMPLETED: 'org:ticket:completed',
+
+  // Delegation trigger (FIX-D: emitted by org-skills, consumed by org-heartbeat)
+  ORG_AGENT_DELEGATED: 'org:agent:delegated',
+
+  // Direct agent chat (FIX-I: chat session lifecycle)
+  ORG_AGENT_CHAT_CLOSED: 'org:agent:chat_closed',
 } as const;
 

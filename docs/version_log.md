@@ -2,6 +2,54 @@
 
 All notable changes to the PersonalClaw agent will be documented in this file.
 
+## [12.0.0] - 2026-03-18
+
+### Autonomous AI Company Orchestration System
+
+#### Organisation Layer
+- Create up to 10 AI organisations with name, mission, and root directory
+- Orgs fully isolated — no cross-org awareness or shared state
+- Org data persisted to `memory/orgs/{orgId}/` on disk
+- Create orgs via Dashboard UI form or PersonalClaw chat (`manage_org` skill)
+- Pause/resume per org (freezes all agent heartbeats)
+- Soft-delete (data archived to `_deleted_{orgId}` directory)
+
+#### Agent Personas
+- Fully custom roles — CEO, CTO, Marketing, Developer, or anything you define
+- Each agent: name, role, personality, responsibilities, goals, autonomy level, heartbeat cron, reporting line
+- Per-agent persistent memory file — agents remember what they did last run
+- Shared org memory — company-wide context visible to all agents
+- Pause/resume per agent
+
+#### Heartbeat Engine
+- Cron schedule per agent (e.g. CEO weekly Monday 9am, Dev every 15 min)
+- Event-triggered heartbeat — delegation wakes target agent automatically
+- Manual trigger from dashboard (⚡ Run) or chat
+- Skip-if-running — concurrent heartbeat skipped, not stacked
+- All heartbeats stopped cleanly on graceful shutdown
+
+#### Ticket System
+- Full Kanban board per org: open → in_progress → blocked → done
+- Priority levels: low, medium, high, critical
+- Any agent can create/update/assign tickets
+- Human can create tickets via dashboard or chat
+- Full comment and history trail per ticket
+- Write-lock protected — concurrent agents never corrupt ticket data
+
+#### Org Agent Runner
+- Org agents run as persona-injected Brain instances, outside ConversationManager
+- System prompt: org mission, identity, colleagues, memory, shared memory, task queue
+- Full access to all 15 existing skills (manage_scheduler excluded)
+- Can spawn sub-agent workers via existing AgentRegistry
+- Session history written to per-agent directory (not global memory/)
+- Self-learning engine skips org agent runs
+
+#### Direct Agent Chat
+- Click 💬 Chat on any agent card to open a direct chat pane
+- Persistent Brain per chat session — agent remembers full conversation context
+- Chat pane is separate from the 3-pane Command Center limit
+- Closing pane cleanly destroys the Brain and frees memory
+
 ## [11.1.0] - 2026-03-17
 
 ### Added
