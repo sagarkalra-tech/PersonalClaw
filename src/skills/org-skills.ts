@@ -271,17 +271,20 @@ export const orgWriteReportSkill: Skill = {
     if (!meta.orgId) return { error: 'Not running in org context' };
     const org = orgManager.get(meta.orgId);
     if (!org) return { error: 'Org not found' };
-    
+
     const agent = org.agents.find(a => a.id === meta.orgAgentId);
     const roleSlug = (agent?.role ?? 'agent').toLowerCase().replace(/\s+/g, '-');
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
-    
+
     // FIX-AH: enforce unique filename — {role}-{timestamp}-{original}
     const safeFilename = `${roleSlug}-${timestamp}-${args.filename}`;
+
+    // Route files into per-agent subdirectory: workspace/{roleSlug}/{subdirectory|reports}/
+    const agentDir = path.join(org.workspaceDir, roleSlug);
     const baseDir = args.subdirectory
-      ? path.join(org.workspaceDir, args.subdirectory)
-      : path.join(org.workspaceDir, 'reports');
-      
+      ? path.join(agentDir, args.subdirectory)
+      : path.join(agentDir, 'reports');
+
     if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir, { recursive: true });
     const filePath = path.join(baseDir, safeFilename);
     fs.writeFileSync(filePath, args.content, 'utf-8');

@@ -718,29 +718,77 @@ io.on('connection', (socket) => {
   });
   
   // Workspace file browser — all files recursively (for Workspace tab)
+  const IGNORED_DIRS = new Set(['.git', 'node_modules', 'dist', 'build', '.next', '__pycache__', '.cache', '.turbo', '.parcel-cache', 'coverage', '.nyc_output', '.vscode', '.idea']);
+  const IGNORED_EXTS = new Set(['.exe', '.dll', '.so', '.dylib', '.o', '.obj', '.bin', '.pak', '.map']);
+
   socket.on('org:workspace:files:all', (params: { orgId: string }) => {
     try {
       const org = orgManager.get(params.orgId);
       if (!org) return socket.emit('org:workspace:files:all', { orgId: params.orgId, files: [] });
       const allFiles: any[] = [];
+      // Build agent attribution map from file activity logs
+      const agentFileMap: Record<string, { agentId: string; agentLabel: string; timestamp: string }> = {};
+      for (const agent of org.agents) {
+        const runsFile = path.join(org.orgDir ?? path.join(path.dirname(org.workspaceDir)), 'agents', agent.id, 'runs.jsonl');
+        if (fs.existsSync(runsFile)) {
+          try {
+            const lines = fs.readFileSync(runsFile, 'utf-8').split('\n').filter(Boolean);
+            for (const line of lines) {
+              try {
+                const run = JSON.parse(line);
+                for (const fa of (run.fileActivity ?? [])) {
+                  agentFileMap[fa.path] = { agentId: agent.id, agentLabel: fa.agentLabel || `${agent.name} (${agent.role})`, timestamp: fa.timestamp };
+                }
+              } catch { /* skip malformed lines */ }
+            }
+          } catch { /* skip unreadable run logs */ }
+        }
+      }
+
+      // Build role slug → agent map for folder-based attribution
+      const roleFolderMap: Record<string, { agentId: string; agentLabel: string }> = {};
+      for (const agent of org.agents) {
+        const roleSlug = agent.role.toLowerCase().replace(/\s+/g, '-');
+        roleFolderMap[roleSlug] = { agentId: agent.id, agentLabel: `${agent.name} (${agent.role})` };
+      }
+
       const walk = (dir: string, rel: string) => {
         if (!fs.existsSync(dir)) return;
         for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
           // Skip comments sidecar files and proposals directory
           if (entry.name.endsWith('.comments.json')) continue;
           if (entry.name === 'proposals' && rel === '') continue;
+          // Skip ignored directories
+          if (entry.isDirectory() && IGNORED_DIRS.has(entry.name)) continue;
+          // Skip hidden directories (start with .)
+          if (entry.isDirectory() && entry.name.startsWith('.') && entry.name !== '.') continue;
           const entryPath = (rel ? rel + '/' : '') + entry.name;
           if (entry.isDirectory()) {
             walk(path.join(dir, entry.name), entryPath);
           } else {
+            // Skip ignored extensions
+            const ext = path.extname(entry.name).toLowerCase();
+            if (IGNORED_EXTS.has(ext)) continue;
             try {
               const stat = fs.statSync(path.join(dir, entry.name));
+              // Attribution priority: 1) run log activity, 2) folder-based (top-level folder matches agent role slug)
+              let attribution = agentFileMap[entryPath] ?? null;
+              if (!attribution) {
+                const topFolder = entryPath.split('/')[0];
+                const folderAgent = roleFolderMap[topFolder];
+                if (folderAgent) {
+                  attribution = { ...folderAgent, timestamp: stat.mtime.toISOString() };
+                }
+              }
               allFiles.push({
                 name: entry.name,
                 isDir: false,
                 path: entryPath,
                 size: stat.size,
                 modified: stat.mtime.toISOString(),
+                agentId: attribution?.agentId ?? null,
+                agentLabel: attribution?.agentLabel ?? null,
+                createdAt: attribution?.timestamp ?? stat.birthtime.toISOString(),
               });
             } catch { /* skip unreadable files */ }
           }
@@ -823,6 +871,86 @@ io.on('connection', (socket) => {
       socket.emit('org:workspace:file:comments', { orgId: params.orgId, path: params.path, comments: existing });
     } catch (e: any) {
       socket.emit('org:error', { message: e.message });
+    }
+  });
+
+  // Workspace: organize existing loose files into per-agent folders
+  socket.on('org:workspace:organize', (params: { orgId: string; dryRun?: boolean }) => {
+    try {
+      const org = orgManager.get(params.orgId);
+      if (!org) return socket.emit('org:workspace:organize:result', { orgId: params.orgId, error: 'Org not found' });
+
+      const moves: { from: string; to: string; agent: string }[] = [];
+
+      // Build role slug → agent map
+      const agentSlugs: { slug: string; name: string; role: string }[] = [];
+      for (const agent of org.agents) {
+        const slug = agent.role.toLowerCase().replace(/\s+/g, '-');
+        agentSlugs.push({ slug, name: agent.name, role: agent.role });
+      }
+
+      // Scan only root-level files and the root-level reports/ folder
+      const rootEntries = fs.existsSync(org.workspaceDir) ? fs.readdirSync(org.workspaceDir, { withFileTypes: true }) : [];
+
+      for (const entry of rootEntries) {
+        if (entry.name === 'proposals' || entry.name === '_shared') continue;
+        // Skip directories that already match an agent slug
+        if (entry.isDirectory() && agentSlugs.some(a => a.slug === entry.name)) continue;
+
+        if (!entry.isDirectory()) {
+          // Try to match root-level files to an agent by role prefix in filename
+          const nameLC = entry.name.toLowerCase();
+          const matchedAgent = agentSlugs.find(a => nameLC.startsWith(a.slug + '-'));
+          if (matchedAgent) {
+            moves.push({
+              from: entry.name,
+              to: `${matchedAgent.slug}/${entry.name}`,
+              agent: `${matchedAgent.name} (${matchedAgent.role})`,
+            });
+          }
+        } else if (entry.name === 'reports') {
+          // Sort files inside reports/ into agent subfolders
+          const reportsDir = path.join(org.workspaceDir, 'reports');
+          if (fs.existsSync(reportsDir)) {
+            for (const reportEntry of fs.readdirSync(reportsDir, { withFileTypes: true })) {
+              if (reportEntry.isDirectory()) continue;
+              const rNameLC = reportEntry.name.toLowerCase();
+              const matchedAgent = agentSlugs.find(a => rNameLC.startsWith(a.slug + '-'));
+              if (matchedAgent) {
+                moves.push({
+                  from: `reports/${reportEntry.name}`,
+                  to: `${matchedAgent.slug}/reports/${reportEntry.name}`,
+                  agent: `${matchedAgent.name} (${matchedAgent.role})`,
+                });
+              }
+            }
+          }
+        }
+      }
+
+      if (!params.dryRun) {
+        for (const move of moves) {
+          const srcPath = path.join(org.workspaceDir, move.from);
+          const destPath = path.join(org.workspaceDir, move.to);
+          const destDir = path.dirname(destPath);
+          if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+          // Also move comment sidecar if it exists
+          fs.renameSync(srcPath, destPath);
+          const commentSrc = srcPath + '.comments.json';
+          if (fs.existsSync(commentSrc)) {
+            fs.renameSync(commentSrc, destPath + '.comments.json');
+          }
+        }
+      }
+
+      socket.emit('org:workspace:organize:result', {
+        orgId: params.orgId,
+        dryRun: !!params.dryRun,
+        moves,
+        count: moves.length,
+      });
+    } catch (e: any) {
+      socket.emit('org:workspace:organize:result', { orgId: params.orgId, error: e.message });
     }
   });
 

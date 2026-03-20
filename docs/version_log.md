@@ -2,6 +2,94 @@
 
 All notable changes to the PersonalClaw agent will be documented in this file.
 
+## [12.5.0] - 2026-03-20
+
+### Per-Agent Workspace Folders — Auto-Organized File System
+
+#### Auto-Organize on Disk
+- Agent files now route to per-agent subdirectories: `workspace/{roleSlug}/reports/`, `workspace/{roleSlug}/{subdirectory}/`
+- CEO files go to `workspace/ceo/`, CMO to `workspace/cmo/`, CTO to `workspace/cto/`, etc.
+- Proposals remain in the shared `workspace/proposals/` directory (internal review system)
+- File Explorer is now clean and navigable without the dashboard
+
+#### "Organize" Migration Button
+- New green "Organize" button in workspace toolbar to sort existing loose files into agent folders
+- Scans root-level files and `reports/` folder, matches to agents by role-slug prefix in filename
+- Moves files and their `.comments.json` sidecars together
+- Shows success banner with count of moved files, auto-refreshes file list
+
+#### Folder-Based Attribution
+- Backend file listing now uses folder-based attribution: files inside `workspace/ceo/` are automatically attributed to the CEO agent
+- Attribution priority: 1) run log activity, 2) folder path match, 3) filename prefix match
+- No more guessing — agent ownership is structural
+
+#### Agent Awareness
+- System prompt now tells each agent about their personal workspace folder path
+- Comment scanning recognizes all files inside an agent's folder as belonging to that agent
+- Entering `workspace/{roleSlug}/` directory marks all nested files as owned
+
+#### Files Changed
+- **Updated**: `src/skills/org-skills.ts` — `org_write_report` routes to `workspace/{roleSlug}/` subdirectory
+- **Updated**: `src/core/org-agent-runner.ts` — system prompt includes agent folder path, comment walker uses folder-based ownership
+- **Updated**: `src/index.ts` — folder-based attribution in file listing, new `org:workspace:organize` socket event for migration
+- **Updated**: `dashboard/src/components/WorkspaceTab.tsx` — Organize button, result banner, socket handler
+- **Updated**: `dashboard/src/index.css` — `.ws-organize-btn`, `.ws-organize-banner` styles
+
+---
+
+## [12.4.0] - 2026-03-20
+
+### Workspace Tab Redesign — IDE-Style File Review System
+
+#### P0: Fixed 25K Unassigned Files Bug
+- Backend file walker (`src/index.ts`) now skips `.git`, `node_modules`, `dist`, `build`, `.next`, `__pycache__`, `.cache`, `.turbo`, `.parcel-cache`, `coverage`, `.nyc_output`, `.vscode`, `.idea` directories
+- Skips all hidden directories (starting with `.`)
+- Filters out binary file extensions (`.exe`, `.dll`, `.so`, `.dylib`, `.o`, `.obj`, `.bin`, `.pak`, `.map`)
+- Drops file count from ~25,000 to actual workspace content only
+
+#### P0: Agent Attribution from Run Logs
+- Backend now reads each agent's `runs.jsonl` to build a file-to-agent attribution map
+- Each file in the API response now includes `agentId`, `agentLabel`, and `createdAt`
+- Files attributed to the agent that created them via activity logs, not just filename guessing
+
+#### P1: IDE-Style Split Layout
+- Replaced flat file list with a full IDE-style workspace: resizable left panel (240–500px) + flex editor right panel
+- Toolbar with file count, unreviewed count, search bar, agent filter dropdown, and refresh button
+- Two view modes togglable from toolbar: **Tree View** (files grouped by agent) and **Timeline View** (most recent first)
+
+#### P1: Agent Color Badges
+- Each agent gets a unique color from a 10-color palette
+- Colored dots appear in the file tree, timeline, and editor header
+- Agent name badge shown in editor header when viewing an attributed file
+
+#### P1: Timeline View
+- Toggle to see all files sorted by most recently modified
+- Each item shows agent color dot, file name, agent name, folder path, relative timestamp, and size
+- Great for answering "what just happened?" at a glance
+
+#### P2: Review Status Indicators
+- Three states per file: unreviewed (yellow dot), approved (green checkmark), commented (blue chat icon)
+- "Approve" button in editor header marks file as reviewed
+- Statuses persist to `localStorage` per org — survives page refresh
+
+#### P2: Inline "Talk to Agent" Panel
+- Bottom of editor shows feedback panel with comment history
+- Shows "to **AgentName**" so you know who receives the feedback
+- Type feedback and hit Enter — creates a comment addressed to the file's owning agent
+- Commenting auto-sets file review status to "commented"
+
+#### P2: Search & Filter
+- Real-time file search across names and paths
+- Agent filter dropdown to show only one agent's files or only unassigned files
+- Filters apply to both tree and timeline views
+
+#### Files Changed
+- **Updated**: `src/index.ts` — directory/extension blacklists, agent attribution from `runs.jsonl`
+- **Rewritten**: `dashboard/src/components/WorkspaceTab.tsx` — complete IDE-style redesign (~400 lines)
+- **Updated**: `dashboard/src/index.css` — new `ws-*` class namespace for workspace styles
+
+---
+
 ## [12.3.0] - 2026-03-20
 
 ### Complete Dashboard UI Overhaul

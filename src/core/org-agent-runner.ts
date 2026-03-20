@@ -97,15 +97,15 @@ function buildOrgAgentSystemPrompt(org: Org, agent: OrgAgent): string {
   try {
     const roleSlug = agent.role.toLowerCase().replace(/\s+/g, '-');
     const agentLabel = `${agent.name} (${agent.role})`;
-    const walkForComments = (dir: string, rel: string): string[] => {
+    const walkForComments = (dir: string, rel: string, isAgentDir: boolean): string[] => {
       const results: string[] = [];
       if (!fs.existsSync(dir)) return results;
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
         if (entry.name.endsWith('.comments.json')) {
           const targetFile = entry.name.replace('.comments.json', '');
           const targetLC = targetFile.toLowerCase();
-          // Check if this file belongs to this agent
-          if (targetLC.startsWith(roleSlug + '-') || targetLC.includes('/' + roleSlug + '-')) {
+          // Check if this file belongs to this agent (either in agent's own folder or by role prefix)
+          if (isAgentDir || targetLC.startsWith(roleSlug + '-') || targetLC.includes('/' + roleSlug + '-')) {
             const commentsPath = path.join(dir, entry.name);
             const comments = JSON.parse(fs.readFileSync(commentsPath, 'utf-8'));
             const unread = comments.filter((c: any) => !c.read);
@@ -117,12 +117,14 @@ function buildOrgAgentSystemPrompt(org: Org, agent: OrgAgent): string {
             }
           }
         } else if (entry.isDirectory() && entry.name !== 'proposals') {
-          results.push(...walkForComments(path.join(dir, entry.name), (rel ? rel + '/' : '') + entry.name));
+          // Files inside agent's own folder are always owned by this agent
+          const enteringAgentDir = !isAgentDir && entry.name === roleSlug;
+          results.push(...walkForComments(path.join(dir, entry.name), (rel ? rel + '/' : '') + entry.name, isAgentDir || enteringAgentDir));
         }
       }
       return results;
     };
-    const commentItems = walkForComments(org.workspaceDir, '');
+    const commentItems = walkForComments(org.workspaceDir, '', false);
     if (commentItems.length > 0) {
       commentsFeedback = `\n\n## Human Comments on Your Files\nThe human owner has left feedback on files you created. Review and act on these:\n${commentItems.join('\n\n')}`;
     }
@@ -186,7 +188,7 @@ You have just been activated. Follow this sequence every single run:
 2. **Check shared memory** — use \`org_read_shared_memory\` for company-wide context.
 3. **Review your tickets** — use \`org_list_tickets\` with \`assignedToMe: true\`.
 4. **Create tickets BEFORE doing any work** — Before executing any task, create a ticket for it using \`org_create_ticket\`. Assign it to yourself (use your own agent ID as \`assigneeId\`). Move it to \`in_progress\` using \`org_update_ticket\`. Complete the work. Then mark it \`done\`. This applies to ALL work — research, writing documents, delegating, strategy, anything. No work without a ticket.
-5. **Do the work** — based on your goals, responsibilities, and task queue, do the most important work. Use all available tools including file system, browser, code execution, and org tools.
+5. **Do the work** — based on your goals, responsibilities, and task queue, do the most important work. Use all available tools including file system, browser, code execution, and org tools. Your personal workspace folder is \`${org.workspaceDir}/${agent.role.toLowerCase().replace(/\\s+/g, '-')}/\` — all your files are organized there automatically.
 6. **Update tickets** — use \`org_update_ticket\` to mark progress or completion.
 7. **Submit major outputs for review** — After completing significant work — writing a strategy document, making a hiring decision, creating a pricing plan, or any output meant for the human owner — call \`org_submit_for_review\` with the content and type. Major decisions that affect the business direction require \`requiresApproval: true\`. Routine outputs like status reports use \`requiresApproval: false\`.
 8. **Delegate if needed** — use \`org_delegate\` to assign work to colleagues.
