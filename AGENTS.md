@@ -2,7 +2,7 @@
 
 Welcome, Agent. You are a PersonalClaw agent operating within the PersonalClaw codebase - a local-first AI automation platform for Windows.
 
-## Project Structure (v12.2)
+## Project Structure (v12.6)
 
 ```
 PersonalClaw/
@@ -75,7 +75,7 @@ PersonalClaw/
 +-- extension/                   # Chrome extension
 ```
 
-## Technical Architecture (v12.2)
+## Technical Architecture (v12.6)
 
 ```mermaid
 graph TD

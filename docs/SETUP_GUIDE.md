@@ -1,6 +1,6 @@
-# 🏁 First-Time Setup Guide: PersonalClaw v12.2
+# 🏁 First-Time Setup Guide: PersonalClaw v12.6
 
-Welcome to PersonalClaw v12.2! This version features **Autonomous AI Organisations** with workspace file management, human comment feedback, and expanded dashboard controls. Follow these steps to get running.
+Welcome to PersonalClaw v12.6! This version features **Twitter/X Automation**, **Relay-based Vision pre-flight**, and robust workspace management tools. Follow these steps to get running.
 
 ---
 

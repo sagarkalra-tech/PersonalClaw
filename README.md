@@ -1,4 +1,4 @@
-# PersonalClaw v12.2 🛸
+# PersonalClaw v12.6 🛸
 
 **The next-generation Windows AI agent. Local. Private. Unstoppable.**
 
@@ -10,7 +10,7 @@ PersonalClaw is a sophisticated, locally-hosted AI agent that combines Google Ge
 
 ---
 
-## ✨ v12.2 — Dashboard Overhaul & Workspace System (NEW)
+## ✨ v12.6 — Twitter/X Automation & Relay Vision (NEW)
 
 ### 🗂️ Workspace Tab
 - **Files by agent role** — Workspace files organised by the agent that created them, with collapsible sections.
@@ -162,7 +162,7 @@ Open [http://localhost:5173](http://localhost:5173) (The batch file will launch 
 - **[SETUP_GUIDE.md](docs/SETUP_GUIDE.md)** — Installation & configuration
 - **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** — Technical architecture and communication specs
 - **[DIR_STRUCTURE.md](docs/DIR_STRUCTURE.md)** — Entire project file mapping
-- **[version_log.md](docs/version_log.md)** — Complete version history (v1 → v12.2)
+- **[version_log.md](docs/version_log.md)** — Complete version history (v1 → v12.6)
 - **[AGENTS.md](AGENTS.md)** — Agent operating instructions and guidelines
 
 ---

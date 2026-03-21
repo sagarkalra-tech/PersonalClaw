@@ -1,9 +1,9 @@
-# PersonalClaw v12.2: End-User Guide 🛸
+# PersonalClaw v12.6: End-User Guide 🛸
 **Developed by Sagar Kalra**
 
 ![PersonalClaw Logo](assets/logo.png)
 
-Welcome to **PersonalClaw v12.2**, your next-generation AI agent for Windows. This version features **Autonomous AI Organisations** with workspace management, human feedback comments, and an expanded dashboard.
+Welcome to **PersonalClaw v12.6**, your next-generation AI agent for Windows. This version features **Twitter/X Automation**, **Relay-Based Vision**, and the refined **v12 Org Orchestration** system.
 
 ---
 

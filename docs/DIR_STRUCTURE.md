@@ -8,9 +8,9 @@ PersonalClaw is a local-first AI automation platform for Windows, integrating Ge
 ## Major Directory Descriptions
 
 - `/src`: Backend implementation in TypeScript (Node.js/Express).
-- `/src/core`: Fundamental systems like the Brain, Event Bus, Session Management, Agent Registry, and the **v12 Org Orchestration** core (`org-manager.ts`, `org-heartbeat.ts`, `org-task-board.ts`, `org-agent-runner.ts`).
+- `/src/core`: Fundamental systems like the Brain, Event Bus, Session Management, Agent Registry, and the **v12.6 Org Orchestration** core (`org-manager.ts`, `org-heartbeat.ts`, `org-task-board.ts`, `org-agent-runner.ts`).
 - `/src/skills`: Individual tool modules (e.g., shell, files, browser, vision, **org-skills**, **org-management**) that the AI can execute.
-- `/dashboard`: Frontend React + Vite application for interacting with the AI, including the **v12 Org Workspace**.
+- `/dashboard`: Frontend React + Vite application for interacting with the AI, including the **v12.6 Org Workspace**.
 - `/docs`: Project documentation, including standard user/setup guides, the `ARCHITECTURE.md` spec, and historical/roadmap data in `docs/Updates/`.
 - `/extension`: Chrome extension for relaying data to the backend.
 - `/scripts`: Utility scripts for automation and setup.
@@ -23,6 +23,7 @@ PersonalClaw is a local-first AI automation platform for Windows, integrating Ge
 
 ```
 PersonalClaw/
+├── browser_data
 ├── dashboard
 │   ├── public
 │   │   └── vite.svg
@@ -38,6 +39,7 @@ PersonalClaw/
 │   │   │   ├── ConversationPane.tsx
 │   │   │   ├── CreateAgentModal.tsx
 │   │   │   ├── CreateOrgModal.tsx
+│   │   │   ├── EditOrgModal.tsx
 │   │   │   ├── OrgChart.tsx               # Hierarchical org agent visualisation
 │   │   │   ├── OrgProtectionSettings.tsx  # File protection config with protected file list viewer
 │   │   │   ├── OrgWorkspace.tsx           # Main org workspace with 8 tabs
@@ -69,6 +71,7 @@ PersonalClaw/
 │   ├── tsconfig.json
 │   ├── tsconfig.node.json
 │   └── vite.config.ts
+├── dist
 ├── docs
 │   ├── assets
 │   │   └── logo.png
@@ -78,7 +81,8 @@ PersonalClaw/
 │   │   ├── V10_FEATURES.md
 │   │   ├── PersonalClaw_v12.1_Implementation_Plan_FINAL_v2.md
 │   │   ├── PersonalClaw_v12.1_Protection_Patch.md
-│   │   └── PersonalClaw_Logging_Patch.md
+│   │   ├── PersonalClaw_Logging_Patch.md
+│   │   └── PersonalClaw_LinkedIn_Local_Plan.md
 │   ├── ARCHITECTURE.md
 │   ├── DIR_STRUCTURE.md
 │   ├── SETUP_GUIDE.md
@@ -91,6 +95,11 @@ PersonalClaw/
 │   ├── manifest.json
 │   ├── popup.html
 │   └── popup.js
+├── logs
+├── memory
+├── orgs
+├── outputs
+├── screenshots
 ├── scripts
 │   ├── check_ssl.ps1
 │   ├── launch_persistent_browser.ps1
@@ -116,7 +125,8 @@ PersonalClaw/
 │   │   ├── relay.ts
 │   │   ├── sessions.ts
 │   │   ├── skill-lock.ts
-│   │   └── telegram-brain.ts
+│   │   ├── telegram-brain.ts
+│   │   └── terminal-logger.ts
 │   ├── interfaces
 │   │   └── telegram.ts
 │   ├── skills
@@ -127,6 +137,7 @@ PersonalClaw/
 │   │   ├── http.ts
 │   │   ├── imagegen.ts
 │   │   ├── index.ts
+│   │   ├── linkedin.ts
 │   │   ├── memory.ts
 │   │   ├── network.ts
 │   │   ├── org-management-skill.ts
@@ -137,6 +148,7 @@ PersonalClaw/
 │   │   ├── scheduler.ts
 │   │   ├── shell.ts
 │   │   ├── system-info.ts
+│   │   ├── twitter.ts
 │   │   └── vision.ts
 │   ├── types
 │   │   └── skill.ts

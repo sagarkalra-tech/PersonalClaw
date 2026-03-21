@@ -65,7 +65,7 @@ type TabType = 'command' | 'metrics' | 'activity' | 'skills' | 'orgs';
 
 const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([
-    { id: '1', text: 'Welcome back. PersonalClaw v12.2 is online and ready.', sender: 'bot', timestamp: new Date() }
+    { id: '1', text: 'Welcome back. PersonalClaw v12.6 is online and ready.', sender: 'bot', timestamp: new Date() }
   ]);
 
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -316,7 +316,7 @@ const App: React.FC = () => {
           <Sparkles size={22} style={{ color: 'var(--accent-primary)' }} />
           {!sidebarCollapsed && <h1>PersonalClaw</h1>}
         </div>
-        {!sidebarCollapsed && <div className="version-badge">v12.2</div>}
+        {!sidebarCollapsed && <div className="version-badge">v12.6</div>}
 
         <nav style={{ flex: 1 }}>
           <ul style={{ listStyle: 'none' }}>
@@ -416,19 +416,21 @@ const App: React.FC = () => {
 
         {/* Tab Content */}
         <div className="content-area" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {/* ── Command Center — Always mounted to preserve chat history ── */}
+          {socket && (
+            <div
+              style={{
+                flex: 1,
+                display: activeTab === 'command' ? 'flex' : 'none',
+                flexDirection: 'column',
+                overflow: 'hidden',
+              }}
+            >
+              <ChatWorkspace socket={socket} isSuperUser={isSuperUser} />
+            </div>
+          )}
+
           <AnimatePresence mode="wait">
-            {/* ── Command Center — Multi-Chat Workspace ── */}
-            {activeTab === 'command' && socket && (
-              <motion.div
-                key="chat"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
-              >
-                <ChatWorkspace socket={socket} isSuperUser={isSuperUser} />
-              </motion.div>
-            )}
 
             {/* ── System Metrics ── */}
             {activeTab === 'metrics' && (

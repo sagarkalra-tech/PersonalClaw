@@ -2,6 +2,41 @@
 
 All notable changes to the PersonalClaw agent will be documented in this file.
 
+## [12.6.0] - 2026-03-21
+
+### Twitter/X Auto-Post Skill — Relay-Based Automation
+
+#### New: `src/skills/twitter.ts` — `twitter_post` Skill
+- Fully automated X/Twitter posting via the Chrome extension relay and `pyautogui` script replay
+- **Relay-first architecture** — uses `extensionRelay` directly (not desktop screenshots) to interact with the user's real logged-in Chrome session
+- **Tab discovery**: Lists open tabs, finds existing x.com tabs, or opens a new one to `x.com/compose/post`
+- **Tab priority logic**: compose/post tab → any x.com tab (navigates it) → new tab
+- **Vision pre-flight**: Takes a relay screenshot of the actual browser tab, analyzes with Gemini 3 Flash to verify:
+  - User is logged in (aborts immediately if not)
+  - No popups or modals blocking the compose area
+  - Page is not still loading
+  - Compose text area is visible and ready
+- **Content validation**: Enforces 280-character limit, rejects empty content
+- **Script execution**: Writes content to `scripts/Post_content.txt`, runs `scripts/xpost.py` (pyautogui click replay)
+- **Single attempt only**: If the script fails, logs the error and reports — never retries or fights the page
+- **Dry run mode**: `dry_run: true` validates full setup + pre-flight without posting
+- **Failure logging**: All events (INFO/WARN/ERROR) appended to `logs/twitter_post.log`
+
+#### Supporting Scripts (pre-existing)
+- `scripts/xpost.py` — Replays recorded mouse coordinates to paste content and click Post
+- `scripts/xteacher.py` — Records click coordinates for the compose → post flow
+- `scripts/twitter_steps.json` — Recorded step data (2+ clicks required)
+
+#### Cron Scheduling
+- Works with the existing `manage_scheduler` skill for automated posting
+- Cron job command tells the LLM to generate content and call `twitter_post`
+
+#### Files Changed
+- **New**: `src/skills/twitter.ts` — full twitter_post skill with relay integration and vision pre-flight
+- **Updated**: `src/skills/index.ts` — registered `twitterSkill` in skill array (18 → 19 skills)
+
+---
+
 ## [12.5.0] - 2026-03-20
 
 ### Per-Agent Workspace Folders — Auto-Organized File System
