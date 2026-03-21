@@ -330,7 +330,7 @@ async function orgAwareHandleToolCall(
   }
 
   const WRITE_SKILLS = new Set(['manage_files', 'manage_pdf']);
-  const WRITE_ACTIONS = new Set(['write', 'append', 'create', 'merge', 'split', 'rotate', 'watermark', 'extract_pages']);
+  const WRITE_ACTIONS = new Set(['write', 'append', 'create', 'delete', 'rename', 'move', 'merge', 'split', 'rotate', 'watermark', 'extract_pages']);
 
   if (WRITE_SKILLS.has(name) && WRITE_ACTIONS.has(args.action)) {
     const targetPath = path.resolve(args.path ?? args.output_path ?? '');
@@ -344,7 +344,7 @@ async function orgAwareHandleToolCall(
     }
     // Not protected — log write activity
     activityLog.push({
-      action: args.action === 'create' ? 'create' : 'write',
+      action: args.action === 'create' ? 'create' : args.action === 'delete' ? 'delete' : args.action === 'rename' || args.action === 'move' ? 'move' : 'write',
       path: targetPath,
       agentId: agent.id,
       agentLabel: `${agent.name} (${agent.role})`,

@@ -1,149 +1,323 @@
-# PersonalClaw - Agent Instructions
+# PersonalClaw — Agent Instructions
 
-Welcome, Agent. You are a PersonalClaw agent operating within the PersonalClaw codebase - a local-first AI automation platform for Windows.
+Welcome, Agent. You are operating within the PersonalClaw codebase — a local-first AI automation platform for Windows built on Google Gemini, Express, Socket.io, and React.
 
-## Project Structure (v12.6)
+For the full technical deep-dive (every interface, every event, every endpoint), see `docs/ARCHITECTURE.md`. This file gives you what you need to work effectively.
+
+---
+
+## Project Structure (v12.6.1)
 
 ```
 PersonalClaw/
-+-- src/                         # TypeScript backend (Express + Socket.io + Gemini AI)
-|   +-- index.ts                 # Server entry point — multi-chat + Org wiring + workspace handlers
-|   +-- core/                    # Core systems
-|   |   +-- brain.ts             # Brain class — Gemini integration, persona injection
-|   |   +-- events.ts            # Event Bus — typed events, 45+ constants
-|   |   +-- skill-lock.ts        # Skill Lock Manager — concurrent resource protection
-|   |   +-- agent-registry.ts    # Agent Registry — worker lifecycle
-|   |   +-- conversation-manager.ts  # Conversation Manager — human chat panes
-|   |   +-- org-manager.ts       # Org Manager — org/agent CRUD + persistence
-|   |   +-- org-heartbeat.ts     # Heartbeat Engine — cron + event triggers
-|   |   +-- org-task-board.ts    # Task Board — ticketing system per org
-|   |   +-- org-agent-runner.ts  # Agent Runner — executes autonomous agents, injects human comments
-|   |   +-- org-file-guard.ts    # Per-org file protection, proposal creation/approval
-|   |   +-- org-notification-store.ts # Persistent notifications + Telegram with rate limits
-|   |   +-- telegram-brain.ts    # Isolated Telegram Brain instance
-|   |   +-- sessions.ts          # Session Manager
-|   |   +-- audit.ts             # Audit Logger
-|   |   +-- learner.ts           # Self-learning engine
-|   |   +-- browser.ts           # Playwright browser core
-|   |   +-- chrome-mcp.ts        # Chrome Native MCP adapter
-|   |   +-- relay.ts             # Extension Relay bridge
-|   +-- skills/                  # Core tool modules
-|   |   +-- index.ts             # Skill registry
-|   |   +-- org-skills.ts        # Org-specific tools (13 skills: tickets, memory, delegate, proposals, etc.)
-|   |   +-- org-management-skill.ts # Human tools for org management
-|   |   +-- shell.ts / files.ts / etc. (15 base skills)
-|   +-- interfaces/
-|   |   +-- telegram.ts          # Telegram bot
-|   +-- types/
-|       +-- skill.ts             # Skill + SkillMeta interfaces
-+-- dashboard/                   # React + Vite frontend (port 5173)
-|   +-- src/
-|       +-- App.tsx              # Main dashboard + Sidebar + Tabs
-|       +-- components/
-|       |   +-- ChatWorkspace.tsx        # Human command center
-|       |   +-- OrgWorkspace.tsx         # Autonomous org dashboard (8 tabs)
-|       |   +-- AgentCard.tsx            # Agent status + EditAgentModal (Reports To dropdown)
-|       |   +-- BoardOfDirectors.tsx     # Org command center — expandable agent health cards
-|       |   +-- OrgChart.tsx             # Hierarchical org agent visualisation
-|       |   +-- ProposalBoard.tsx        # Code change proposals only
-|       |   +-- WorkspaceTab.tsx         # Files by agent role, inline editor, comments
-|       |   +-- WorkspaceBrowser.tsx     # Directory tree file browser
-|       |   +-- OrgProtectionSettings.tsx # Protection config + protected file list viewer
-|       |   +-- TicketBoard.tsx          # Kanban task board
-|       |   +-- AgentChatPane.tsx        # Direct persistent agent chat
-|       |   +-- ConversationPane.tsx     # Legacy/Main chat pane
-|       |   +-- WorkerCard.tsx           # Worker status card
-|       +-- hooks/
-|       |   +-- useConversations.ts   # Human chat state
-|       |   +-- useOrgs.ts            # Org & heartbeats state
-|       |   +-- useOrgChat.ts         # Persistent agent chat sessions
-|       |   +-- useAgents.ts          # Agent registry state
-|       +-- types/
-|           +-- conversation.ts / org.ts
-+-- orgs/                        # Persistent org data (one dir per org)
-|   +-- {org-name-shortid}/
-|       +-- org.json             # Org config + agents
-|       +-- workspace/           # Agent working directory
-|       +-- agents/{agentId}/    # Per-agent memory + run logs
-|       +-- proposals.json       # Code proposals + review submissions
-|       +-- tickets.json         # Task board
-|       +-- blockers.json        # Open blockers
-|       +-- notifications.jsonl  # Stored notifications
-+-- docs/                        # Project documentation
-+-- memory/                      # Persistent data (sessions, knowledge)
-+-- scripts/                     # Utility scripts
-+-- extension/                   # Chrome extension
-```
-
-## Technical Architecture (v12.6)
-
-```mermaid
-graph TD
-    User([User]) <--> Dashboard[Vite React Dashboard]
-    User <--> Telegram[Telegram Bot]
-    
-    subgraph PersonalClaw_Core
-        Server[Express + Socket.io Server]
-        OrgManager[Org Manager]
-        Heartbeat[Heartbeat Engine]
-        Runner[Agent Runner]
-        Brain[Gemini Reasoning Engine]
-        Registry[Skill Registry]
-    end
-    
-    Dashboard <--> Server
-    Telegram <--> Server
-    Server <--> OrgManager
-    OrgManager <--> Heartbeat
-    Heartbeat <--> Runner
-    Runner <--> Brain
-    Brain <--> Registry
-    
-    subgraph Skills
-        Registry --> PowerShell[PowerShell Skill]
-        Registry --> OrgSkills[Org Skills: Ticket/Memory]
-        Registry --> Vision[Vision Skill]
-        Registry --> Browser[Unified Browser Skill]
-        Registry --> File[File System Skill]
-        Registry --> Manager[Org Management Skill]
-    end
+├── src/
+│   ├── index.ts                    # Express server, Socket.io, REST API, startup sequence
+│   ├── types/
+│   │   └── skill.ts                # Skill + SkillMeta interfaces
+│   ├── core/
+│   │   ├── brain.ts                # Brain class — Gemini multi-model, tool loop, failover, compaction
+│   │   ├── conversation-manager.ts # Human chat panes (max 3 concurrent)
+│   │   ├── agent-registry.ts       # Sub-agent worker lifecycle (max 5 per chat)
+│   │   ├── org-manager.ts          # Org/Agent CRUD + JSON persistence
+│   │   ├── org-heartbeat.ts        # Cron scheduling + event-triggered agent runs
+│   │   ├── org-agent-runner.ts     # Executes org agents as persona-injected Brains
+│   │   ├── org-task-board.ts       # Kanban ticket system per org (write-lock protected)
+│   │   ├── org-file-guard.ts       # File protection + code proposal workflow
+│   │   ├── org-notification-store.ts # Persistent notifications + Telegram (rate-limited)
+│   │   ├── skill-lock.ts           # Concurrent resource protection (exclusive + read-write locks)
+│   │   ├── events.ts               # EventBus — 45+ typed events
+│   │   ├── browser.ts              # BrowserManager — Playwright + native Chrome CDP
+│   │   ├── chrome-mcp.ts           # Chrome 146+ native MCP / CDP adapter
+│   │   ├── relay.ts                # Chrome Extension WebSocket relay (/relay path)
+│   │   ├── audit.ts                # JSONL audit logging with rotation
+│   │   ├── sessions.ts             # Session save/restore/search
+│   │   ├── learner.ts              # Self-learning engine (async, uses gemini-2.5-flash)
+│   │   └── telegram-brain.ts       # Isolated Telegram Brain instance
+│   ├── interfaces/
+│   │   └── telegram.ts             # Telegraf bot — polling, retry, markdown formatting, typing indicator
+│   └── skills/                     # 19 registered skills
+│       ├── index.ts                # Skill registry, getToolDefinitions(), handleToolCall()
+│       ├── shell.ts                # execute_powershell — PowerShell commands
+│       ├── python.ts               # run_python_script — dynamic Python execution
+│       ├── files.ts                # manage_files — read/write/append/delete/list
+│       ├── vision.ts               # analyze_vision — screenshot + Gemini Vision
+│       ├── clipboard.ts            # manage_clipboard — read/write clipboard
+│       ├── memory.ts               # manage_long_term_memory — learn/recall/forget
+│       ├── browser.ts              # browser — 3 modes (Playwright/native Chrome/relay), 26 actions
+│       ├── http.ts                 # http_request — REST API client (axios)
+│       ├── network.ts              # network_diagnostics — ping/dns/traceroute/port check (9 actions)
+│       ├── process-manager.ts      # manage_processes — process/service control (10 actions)
+│       ├── system-info.ts          # system_info — deep system diagnostics (12 actions)
+│       ├── pdf.ts                  # manage_pdf — extract/merge/split/watermark/create (8 actions)
+│       ├── imagegen.ts             # generate_image — Gemini Pro/Flash image gen
+│       ├── agent-spawn.ts          # spawn_agent — parallel sub-agent workers
+│       ├── org-management-skill.ts # manage_org — org/agent CRUD from chat
+│       ├── org-skills.ts           # 13 org-agent-only skills (tickets, memory, delegate, proposals)
+│       ├── scheduler.ts            # manage_scheduler — cron job management
+│       ├── linkedin.ts             # linkedin_post — pyautogui replay automation
+│       └── twitter.ts              # twitter_post — relay + vision pre-flight + pyautogui
+├── dashboard/                      # React 19 + Vite frontend (port 5173)
+│   └── src/
+│       ├── App.tsx                 # Main dashboard — sidebar, 5 tabs, metrics, socket
+│       ├── index.css               # Design system — light theme, indigo accent (#4338ca)
+│       ├── components/
+│       │   ├── ChatWorkspace.tsx        # Multi-pane resizable chat (react-resizable-panels)
+│       │   ├── ConversationPane.tsx     # Single chat — markdown, workers, screenshots
+│       │   ├── OrgWorkspace.tsx         # 8-tab org management container
+│       │   ├── AgentCard.tsx            # Agent card + EditAgentModal (heartbeat, reports-to)
+│       │   ├── AgentChatPane.tsx        # Direct agent chat (minimize/close)
+│       │   ├── BoardOfDirectors.tsx     # Agent health dashboard, expandable cards
+│       │   ├── OrgChart.tsx             # Hierarchical org visualization
+│       │   ├── TicketBoard.tsx          # Kanban — open/in_progress/blocked/done
+│       │   ├── WorkspaceTab.tsx         # IDE-style file explorer + editor + comments
+│       │   ├── ProposalBoard.tsx        # Code proposal diff view + approve/reject
+│       │   ├── OrgProtectionSettings.tsx # Protection mode config + file list
+│       │   └── WorkerCard.tsx           # Sub-agent status card
+│       ├── hooks/
+│       │   ├── useConversations.ts      # Chat state + socket handlers
+│       │   ├── useOrgs.ts              # Org/agent/ticket/proposal state
+│       │   ├── useOrgChat.ts           # Agent direct messaging (minimize/close)
+│       │   ├── useAgents.ts            # Sub-agent worker tracking
+│       │   └── useScreenshot.ts        # DisplayMedia screen capture
+│       └── types/
+│           ├── conversation.ts          # Message, WorkerAgentInfo
+│           └── org.ts                   # Org, OrgAgent, Ticket, Proposal, Blocker
+├── extension/                      # Chrome MV3 relay extension
+│   ├── manifest.json               # Permissions: tabs, activeTab, scripting
+│   ├── background.js               # WebSocket to ws://127.0.0.1:3000/relay
+│   ├── content.js                  # DOM interaction (click, type, scrape, scroll, evaluate)
+│   └── popup.html / popup.js       # Connection status + config
+├── orgs/                           # Persistent org data (one dir per org)
+│   └── {orgName}-{shortId}/
+│       ├── org.json                # Org config + agents array
+│       ├── workspace/              # Shared project files
+│       │   ├── {role-slug}/        # Per-agent folder (ceo/, cto/, dev/, etc.)
+│       │   └── proposals/{id}/     # Original + proposed file content
+│       ├── agents/{agentId}/
+│       │   ├── memory.json         # Agent private memory
+│       │   └── runs.jsonl          # Run history (one JSON per line)
+│       ├── shared_memory.json      # Org-wide shared state
+│       ├── tickets.json            # Task board
+│       ├── proposals.json          # Proposal metadata
+│       ├── blockers.json           # Open blockers
+│       └── notifications.jsonl     # Stored notifications
+├── memory/                         # Persistent storage
+│   ├── long_term_knowledge.json    # Learned user preferences
+│   ├── self_learned.json           # Auto-learned patterns
+│   ├── scheduled_jobs.json         # Active cron jobs
+│   └── audit/                      # Daily JSONL audit logs
+├── scripts/                        # Automation scripts
+│   ├── xpost.py                    # Twitter posting (pyautogui replay)
+│   ├── xteacher.py                 # Record mouse clicks for automation
+│   ├── twitter_steps.json          # Recorded click coordinates
+│   └── Post_content.txt            # Tweet content buffer
+├── screenshots/                    # Vision + relay screenshots
+├── outputs/                        # Generated PDFs + images
+├── logs/                           # twitter_post.log, activity.jsonl, daily server logs
+├── docs/
+│   ├── ARCHITECTURE.md             # FULL technical reference (share with any AI)
+│   └── version_log.md              # Changelog (update when making changes)
+└── .env                            # GEMINI_API_KEY, PORT, TELEGRAM_BOT_TOKEN, etc.
 ```
 
 ---
 
-## AI Logic (Brain Loop)
+## Architecture at a Glance
 
-PersonalClaw runs a **multi-turn tool execution loop**:
-1. Human or Heartbeat triggers an agent.
-2. If Heartbeat: OrgAgentRunner creates a Brain with **Persona Injection** (Mission + Role).
-3. Brain checks Task Board and Memory, then builds a Plan.
-4. **Human comments** on workspace files are injected into the system prompt so agents can act on feedback.
-5. Tools execute via `handleToolCall`, acquiring global/per-path locks.
-6. Protected file writes are intercepted and routed to the proposal system.
-7. Non-code submissions (documents, plans, hiring) are auto-approved unless `requiresApproval: true`.
-8. Loop repeats until the agent has achieved its run goals or delegates.
-9. Run summary is recorded and session history is saved.
+```
+Dashboard (:5173) ←──Socket.io──→ Express Server (:3000)
+                                       │
+                    ┌──────────────────┼──────────────────┐
+                    │                  │                  │
+             ConversationMgr      OrgManager         Relay (/relay)
+             (3 human chats)    + Heartbeat Engine   (Chrome extension)
+                    │              + TaskBoard
+                    │                  │
+                    └────── Brain ─────┘
+                           (Gemini)
+                              │
+                        19 Skills + 13 Org Skills
+
+Telegram (Telegraf) ──polling──→ telegramBrain (isolated Brain)
+                                  │
+                             19 Skills (NO org skills)
+                             Separate history, no persistence
+```
+
+**Four operation modes:**
+1. **Human Chat** — Up to 3 chat panes, each with its own Brain instance
+2. **Autonomous Orgs** — AI agent teams on cron schedules with tickets, delegation, proposals
+3. **Scheduled Tasks** — Cron jobs that trigger the Brain to perform recurring work
+4. **Telegram** — Isolated Brain for remote control via mobile (no org access, no persistence)
+
+---
+
+## AI Engine (Brain)
+
+- **Class**, not singleton — each chat/agent/worker gets its own instance
+- **Model failover:** `gemini-3-flash-preview → gemini-3.1-pro-preview → gemini-2.5-pro → gemini-2.5-flash → gemini-3.1-flash-lite-preview`
+- **Tool loop:** message → Gemini responds with tool calls → execute via `handleToolCall()` → inject results → loop until text-only response
+- **Context compaction:** auto-summarizes at ~50 messages to stay within 1M token limit
+- **Org agents:** Brain gets persona system prompt (mission, role, colleagues, tickets, memory, human comments)
+
+---
+
+## Skill Interface
+
+Every skill follows this contract:
+
+```typescript
+interface Skill {
+  name: string;                              // Tool name the AI calls
+  description: string;                       // AI reads this to decide when/how to use it
+  parameters: any;                           // JSON Schema for args
+  run: (args: any, meta: SkillMeta) => Promise<any>;
+}
+
+interface SkillMeta {
+  agentId: string;
+  conversationId: string;
+  conversationLabel: string;                 // "Chat 1", "Agent: CEO", etc.
+  isWorker: boolean;
+  orgId?: string;                            // Set for org agents only
+  orgAgentId?: string;
+}
+```
+
+### Skill Locking
+
+| Lock Key | Type | Timeout | Used By |
+|----------|------|---------|---------|
+| `browser_vision` | Exclusive | 60s | browser, vision |
+| `clipboard` | Exclusive | 5s | clipboard |
+| `memory` | Read-Write | 5s | memory, org memory skills |
+| `scheduler` | Read-Write | 5s | scheduler |
+| `files:{path}` | Read-Write | 10s | files, pdf, task board |
+
+Pattern: `const release = await skillLock.acquireExclusive(key, holder); try { ... } finally { release(); }`
+
+---
+
+## How to Add a New Skill
+
+1. Create `src/skills/my-skill.ts`:
+```typescript
+import type { Skill, SkillMeta } from '../types/skill.js';
+
+export const mySkill: Skill = {
+  name: 'my_skill_name',
+  description: 'Detailed description — the AI reads this to decide when to call it.',
+  parameters: {
+    type: 'object',
+    properties: {
+      action: { type: 'string', enum: ['do_thing'], description: '...' },
+      input: { type: 'string', description: '...' },
+    },
+    required: ['action'],
+  },
+  run: async (args: any, meta: SkillMeta) => {
+    // Your logic here
+    return { success: true, result: '...' };
+  },
+};
+```
+
+2. Register in `src/skills/index.ts`:
+```typescript
+import { mySkill } from './my-skill.js';
+export const skills: Skill[] = [ ..., mySkill ];
+```
+
+3. Run `npx tsc --noEmit` to verify, restart server.
+
+**Tips:**
+- Use `skillLock` if your skill touches shared resources
+- Return `{success: false, error: '...'}` on failure (the AI reads it)
+- The `description` is critical — it's the AI's only guide for when/how to use the tool
+- Check `meta.orgId` to detect org agent context
+- For org-only skills, add to `org-skills.ts` and inject via `injectExtraTools()`
+- Follow existing patterns (see `linkedin.ts` or `twitter.ts` for social media skills)
+
+---
+
+## How to Add a New Dashboard Component
+
+1. Create component in `dashboard/src/components/MyComponent.tsx`
+2. Add to the relevant tab in `App.tsx` or `OrgWorkspace.tsx`
+3. Use Socket.io events for real-time data (see `useOrgs.ts` pattern)
+4. Style using class names in `dashboard/src/index.css` (light theme, indigo accent `#4338ca`)
+
+**State management:** Custom hooks (`useOrgs`, `useConversations`, etc.) — no Redux, no context providers.
+
+---
+
+## Org System Quick Reference
+
+| Concept | File | Storage |
+|---------|------|---------|
+| Org config + agents | `org-manager.ts` | `orgs/{name}/org.json` |
+| Agent execution | `org-agent-runner.ts` | `agents/{id}/runs.jsonl` |
+| Cron scheduling | `org-heartbeat.ts` | Agent's `heartbeat.cron` field |
+| Tickets | `org-task-board.ts` | `tickets.json` |
+| Code proposals | `org-file-guard.ts` | `proposals.json` + `workspace/proposals/` |
+| Agent memory | `org-skills.ts` | `agents/{id}/memory.json` |
+| Shared memory | `org-skills.ts` | `shared_memory.json` |
+| Notifications | `org-notification-store.ts` | `notifications.jsonl` |
+
+**Org agent restrictions:** Cannot use `execute_powershell`, `run_python_script`, or `manage_scheduler`. Protected file writes are intercepted and routed to proposal system.
 
 ---
 
 ## Key Technologies
-- Runtime: Node.js with TypeScript (tsx for dev, tsc for build)
-- AI Model: Google Gemini (API key in .env)
-- Backend: Express + Socket.io for real-time communication
-- Frontend: React + Vite dashboard
-- Browser Automation: Playwright with persistent context
-- Communication: Telegram bot integration
+
+| Tech | Version | Purpose |
+|------|---------|---------|
+| Node.js + TypeScript | ESNext, strict | Backend runtime |
+| Express | ^5.2.1 | HTTP server |
+| Socket.io | ^4.8.3 | Real-time communication |
+| Google Gemini | `@google/generative-ai` ^0.24.1 | AI model (5-model failover) |
+| React | ^19.2.0 | Dashboard UI |
+| Vite | — | Frontend dev server + build |
+| Playwright | ^1.58.2 | Browser automation |
+| node-cron | ^4.2.1 | Cron scheduling |
+| Telegraf | ^4.16.3 | Telegram bot |
+
+---
 
 ## Rules for Agents
-1. Read before writing: Always read existing files before modifying them.
-2. Preserve patterns: Follow existing code conventions (ESM imports, .js extensions in imports, async/await).
-3. Documentation matters: Update docs/version_log.md when making significant changes.
-4. Don't break the server: The backend runs on port 3000, the dashboard on port 5173. Don't change these.
-5. Test your changes: Run "npx tsc --noEmit" to verify TypeScript compiles cleanly.
-6. Environment variables: All secrets live in .env - never hardcode API keys.
 
-## What You Can Do
-- Read and modify any file in this workspace
-- Analyze the codebase structure and suggest improvements
-- Create issues and track work via GitHub/Local tickets
-- Review documentation for accuracy
+1. **Read before writing.** Always read existing files before modifying them.
+2. **Preserve patterns.** Follow existing conventions:
+   - ESM imports with `.js` extensions (TypeScript compiles to ESM)
+   - `async/await` everywhere
+   - Skills return `{success: boolean, ...}` objects
+   - Error handling: return error objects, don't throw
+3. **Update docs.** Update `docs/version_log.md` when making significant changes. Increment version.
+4. **Don't break ports.** Backend: 3000, Dashboard: 5173. Don't change these.
+5. **Type-check.** Run `npx tsc --noEmit` to verify TypeScript compiles cleanly.
+6. **No hardcoded secrets.** All API keys live in `.env`.
+7. **Respect locks.** If your code accesses shared resources (browser, clipboard, files, memory), use the skill lock system.
+8. **Test relay skills.** If building anything that uses the extension relay, verify `extensionRelay.connected` first.
+9. **Log failures.** For automation skills (social media, scheduled tasks), log to `logs/` directory.
+10. **Single responsibility.** Each skill does one thing. Don't merge unrelated functionality.
+
+---
+
+## Quick Commands
+
+```bash
+npm run all          # Start backend + dashboard together
+npm run dev          # Backend only (watch mode)
+npm run dashboard    # Frontend only (Vite dev server)
+npx tsc --noEmit     # Type-check without building
+npm run build        # Compile to dist/
+npm start            # Production mode (dist/index.js)
+```
+
+---
+
+## Where to Find More
+
+- **Full technical reference:** `docs/ARCHITECTURE.md` — every interface, event, endpoint, skill parameter
+- **Changelog:** `docs/version_log.md` — what changed in each version
+- **Environment config:** `.env` — API keys and settings

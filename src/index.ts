@@ -1186,6 +1186,9 @@ const shutdown = async (signal: string) => {
 
   eventBus.dispatch(Events.SERVER_SHUTDOWN, { signal }, 'server');
 
+  // Stop Telegram bot polling to prevent 409 conflicts on restart
+  telegram.stop();
+
   // FIX-G: Stop all org heartbeat cron tasks before anything else
   orgHeartbeat.stopAll();
 

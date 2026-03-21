@@ -2,6 +2,42 @@
 
 All notable changes to the PersonalClaw agent will be documented in this file.
 
+## [12.6.1] - 2026-03-21
+
+### Telegram Bot — Reliability, Formatting & UX Fixes
+
+#### Fixed: Bot Polling 409 Conflicts
+- **Root cause**: `bot.launch()` was fire-and-forget with no retry. When the server restarted, the old polling connection lingered (no graceful shutdown), causing Telegram's API to return `409: Conflict: terminated by other getUpdates request`. The new instance silently died — incoming messages never worked.
+- **Fix**: Replaced one-shot `launch().catch()` with `launchWithRetry()` — retries up to 5 times with exponential backoff (5s → 10s → 15s → 30s) for 409 conflicts.
+- **Graceful shutdown**: Added `telegram.stop()` to the server shutdown handler so polling is cleanly terminated on restart, preventing 409 conflicts entirely.
+- **`dropPendingUpdates: true`**: Passed to `launch()` to discard stale queued messages from while the bot was offline.
+- **Global error handler**: Added `bot.catch()` so runtime polling errors are logged instead of silently swallowed.
+
+#### Fixed: Markdown Rendering — No More Raw `***` and `###`
+- Gemini returns GitHub-flavored markdown which displayed as raw syntax in Telegram (headers, bold, bullets, code blocks all broken).
+- **New `markdownToTelegram()` converter**: Transforms GFM → Telegram MarkdownV2 format:
+  - `### Headers` → **bold text**
+  - `**bold**` → Telegram bold
+  - `~~strike~~` → Telegram strikethrough
+  - `` `code` `` and code blocks preserved
+  - `- bullets` → `• bullets`
+  - Special characters escaped for MarkdownV2 compliance
+- **Automatic fallback**: If MarkdownV2 parsing fails (Telegram is strict), retries as clean plaintext via `markdownToPlaintext()` which strips all markdown syntax.
+- **Applies to both directions**: Incoming message replies AND outbound notifications (org alerts, daily digests) now render cleanly.
+
+#### New: Continuous Typing Indicator
+- Previously: single `sendChatAction('typing')` fired once, expired after 5 seconds — no visible feedback during long processing.
+- Now: typing indicator fires immediately then repeats every 4 seconds via `setInterval`, keeping the "typing..." bubble visible the entire time the Brain processes. Cleared on response or error.
+
+#### Improved: Message Splitting
+- Telegram's 4096-character limit now handled properly — long responses split into sequential chunks with formatting preserved.
+
+#### Files Changed
+- **Updated**: `src/interfaces/telegram.ts` — retry logic, markdown converter, typing interval, formatted replies, error handler
+- **Updated**: `src/index.ts` — `telegram.stop()` in shutdown handler
+
+---
+
 ## [12.6.0] - 2026-03-21
 
 ### Twitter/X Auto-Post Skill — Relay-Based Automation

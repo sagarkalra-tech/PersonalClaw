@@ -316,7 +316,7 @@ const App: React.FC = () => {
           <Sparkles size={22} style={{ color: 'var(--accent-primary)' }} />
           {!sidebarCollapsed && <h1>PersonalClaw</h1>}
         </div>
-        {!sidebarCollapsed && <div className="version-badge">v12.6</div>}
+        {!sidebarCollapsed && <div className="version-badge">v12.6.1</div>}
 
         <nav style={{ flex: 1 }}>
           <ul style={{ listStyle: 'none' }}>

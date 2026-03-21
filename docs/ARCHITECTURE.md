@@ -20,7 +20,7 @@ PersonalClaw is a **local-first AI automation platform** for Windows. It connect
 - AI Backend: Google Gemini (5-model failover chain)
 - Frontend: React 19 + Socket.io (real-time)
 - Browser Control: Playwright + Chrome Extension Relay + Native Chrome CDP
-- Version: 12.6.0
+- Version: 12.6.1
 - Author: Scout Kalra
 
 ---
@@ -190,8 +190,8 @@ PersonalClaw/
 | `GEMINI_MODEL` | No | `gemini-3-flash-preview` | Primary model (failover chain starts here) |
 | `GEMINI_LEARNER_MODEL` | No | `gemini-2.5-flash` | Cheap model for self-learning analysis |
 | `PORT` | No | `3000` | Backend server port |
-| `TELEGRAM_BOT_TOKEN` | No | — | Telegram bot token (optional) |
-| `AUTHORIZED_CHAT_ID` | No | — | Locks Telegram bot to one user |
+| `TELEGRAM_BOT_TOKEN` | No | — | Telegram bot token (optional, enables remote control) |
+| `AUTHORIZED_CHAT_ID` | No | — | Locks Telegram bot to one user (required for security) |
 | `LINKEDIN_SCRIPT_DIR` | No | `C:\LinkedInBot` | LinkedIn automation scripts directory |
 
 ---
@@ -586,6 +586,56 @@ interface Ticket {
 
 ---
 
+## Telegram Interface
+
+**File:** `src/interfaces/telegram.ts` + `src/core/telegram-brain.ts`
+
+### Architecture
+
+The Telegram bot is a **completely isolated** Brain instance — separate from the dashboard's 3-pane chat and from org agents.
+
+```
+Telegram App → Telegraf (long polling) → telegramBrain.processMessage()
+                                              │
+                                        Isolated Brain
+                                        (agentId: telegram_primary)
+                                              │
+                                        19 standard skills
+                                        (NO org skills)
+```
+
+**Key isolation properties:**
+- Not listed in `conversationManager.list()` — doesn't count toward the 3-pane limit
+- No `orgId`/`orgAgentId` — all org skills return "Not running in org context"
+- History not saved on shutdown — Telegram users reconnect fresh
+- One-way org connection: org agents can push notifications TO Telegram, but Telegram can't talk to org agents
+
+### Inbound (User → Bot)
+
+1. Telegraf polls Telegram API for updates (long polling, not webhooks)
+2. `bot.on('text')` handler fires, checks `AUTHORIZED_CHAT_ID`
+3. Typing indicator starts (repeats every 4s via `setInterval`)
+4. `telegramBrain.processMessage(message)` processes through Gemini + tool loop
+5. Response converted from GitHub-flavored markdown → Telegram MarkdownV2 (with plaintext fallback)
+6. Long responses split into 4096-char chunks
+
+### Outbound (System → User)
+
+Org notifications (`storeNotification()`) and daily digests flow through `sendMessage()`:
+1. `flushTelegramQueue()` picks up pending notifications (rate-limited: 5 per agent run)
+2. Message formatted with emoji prefix by notification level
+3. Converted to MarkdownV2 with plaintext fallback
+4. Sent via `bot.telegram.sendMessage(AUTHORIZED_CHAT_ID, ...)`
+
+### Reliability
+
+- **Retry with backoff**: `launchWithRetry()` handles 409 conflicts (stale polling from previous instance) with up to 5 retries and exponential backoff
+- **Graceful shutdown**: `telegram.stop()` called on SIGINT/SIGTERM to cleanly release the polling connection
+- **`dropPendingUpdates: true`**: Discards stale messages queued while bot was offline
+- **`bot.catch()` handler**: Logs runtime polling errors instead of silently swallowing them
+
+---
+
 ## Chrome Extension Relay
 
 **Directory:** `extension/`
@@ -804,11 +854,12 @@ All learned data persisted to `memory/self_learned.json` and injected into every
 12. Print startup banner
 
 ### Shutdown (SIGINT/SIGTERM)
-1. Stop all heartbeat crons
-2. Close all conversation Brains
-3. Flush audit buffer
-4. Close Socket.io
-5. Stop HTTP server
+1. Stop Telegram bot polling (prevents 409 conflicts on restart)
+2. Stop all heartbeat crons
+3. Close all conversation Brains
+4. Flush audit buffer
+5. Close Socket.io
+6. Stop HTTP server
 
 ---
 
@@ -943,4 +994,4 @@ export const skills: Skill[] = [ ..., mySkill ];
 
 ---
 
-*Last updated: 2026-03-21 — PersonalClaw v12.6.0*
+*Last updated: 2026-03-21 — PersonalClaw v12.6.1*
