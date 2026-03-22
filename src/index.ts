@@ -386,16 +386,40 @@ setInterval(async () => {
 }, 2000);
 
 // ─── Socket.io — Real-time Dashboard ────────────────────────────────
+const mobileSocketIds = new Set<string>();
+
 io.on('connection', (socket) => {
   console.log(`[Server] Dashboard connected: ${socket.id}`);
   eventBus.dispatch(Events.DASHBOARD_CONNECTED, { socketId: socket.id }, 'server');
+
+  // Mobile clients identify themselves so we skip push when they have a live socket
+  socket.on('client:identify', (data: { platform?: string }) => {
+    if (data?.platform === 'mobile') {
+      mobileSocketIds.add(socket.id);
+      console.log(`[Server] Mobile client identified: ${socket.id}`);
+    }
+  });
+
+  socket.on('disconnect', () => {
+    mobileSocketIds.delete(socket.id);
+  });
+
+  // Include full message history per conversation so mobile reconnects restore all messages
+  const convoList = conversationManager.list().map(c => ({
+    ...c,
+    messages: conversationManager.getMessages(c.id).map(m => ({
+      role: m.role,
+      content: m.text,
+      timestamp: Date.now(),
+    })),
+  }));
 
   socket.emit('init', {
     version: '12.0.0',
     skills: skills.map(s => ({ name: s.name, description: s.description.split('\n')[0] })),
     metrics: cachedMetrics,
     activity: activityBuffer.slice(-20),
-    conversations: conversationManager.list(),
+    conversations: convoList,
     orgs: orgManager.list(), // v12 addition
   });
 
@@ -421,9 +445,24 @@ io.on('connection', (socket) => {
       }
 
       const response = await conversationManager.send(conversationId, finalPrompt);
-      socket.emit('response', { conversationId, text: response });
+      console.log(`[Server] Response ready for ${conversationId} (${response.length} chars), connected sockets: ${io.engine.clientsCount}`);
+
+      // Broadcast to ALL connected clients — the original socket may have disconnected
+      // while the AI was thinking (mobile app backgrounded, socket killed by Android)
+      io.emit('response', { conversationId, text: response });
+
+      // Always send push notification so the user gets it even if backgrounded
+      const preview = response.replace(/[#*`>\-_~]/g, '').trim().slice(0, 120);
+      console.log(`[Push] Sending chat response push: "${preview.slice(0, 50)}..."`);
+      try {
+        await sendPushNotification('PersonalClaw', preview, { type: 'chat_response', conversationId });
+        console.log('[Push] Chat response push sent successfully');
+      } catch (pushErr: any) {
+        console.error('[Push] Chat response push FAILED:', pushErr.message);
+      }
     } catch (err: any) {
-      socket.emit('response', {
+      console.error(`[Server] Response error for ${conversationId}:`, err.message);
+      io.emit('response', {
         conversationId, text: `Error: ${err.message}`, isError: true,
       });
     }
@@ -677,6 +716,24 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Mobile app memory list — returns entries as key/value array
+  socket.on('org:memory:list', (params: { orgId: string; scope: string }) => {
+    try {
+      const { orgId, scope } = params;
+      const file = scope === 'shared'
+        ? orgManager.getSharedMemoryFile(orgId)
+        : orgManager.getAgentMemoryFile(orgId, scope);
+      const raw = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf-8')) : {};
+      const entries = Object.entries(raw).map(([key, value]) => ({
+        key,
+        value: typeof value === 'string' ? value : JSON.stringify(value, null, 2),
+      }));
+      socket.emit('org:memory:list', { orgId, scope, entries });
+    } catch (err: any) {
+      socket.emit('org:memory:list', { orgId: params.orgId, scope: params.scope, entries: [] });
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log(`[Server] Dashboard disconnected: ${socket.id}`);
     eventBus.dispatch(Events.DASHBOARD_DISCONNECTED, { socketId: socket.id }, 'server');
@@ -697,6 +754,14 @@ io.on('connection', (socket) => {
   });
   socket.on('org:proposal:reject', (params: { orgId: string; proposalId: string }) => {
     const result = rejectProposal(params.orgId, params.proposalId);
+    if (result.success) io.emit('org:proposal:update', { orgId: params.orgId });
+    socket.emit('org:proposal:result', result);
+  });
+  // Unified action handler used by the mobile app
+  socket.on('org:proposal:action', (params: { orgId: string; proposalId: string; action: 'approve' | 'reject' }) => {
+    const result = params.action === 'approve'
+      ? approveProposal(params.orgId, params.proposalId)
+      : rejectProposal(params.orgId, params.proposalId);
     if (result.success) io.emit('org:proposal:update', { orgId: params.orgId });
     socket.emit('org:proposal:result', result);
   });
@@ -1308,6 +1373,146 @@ app.put('/api/todos/:id', (req, res) => {
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
+});
+
+// ─── Voice STT (Gemini) ─────────────────────────────────────────────
+import multer from 'multer';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+app.post('/api/voice/transcribe', upload.single('audio'), async (req: any, res: any) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No audio file' });
+    if (!process.env.GEMINI_API_KEY) return res.status(503).json({ error: 'GEMINI_API_KEY not set' });
+
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+    const base64Audio = req.file.buffer.toString('base64');
+    const mimeType = (req.file.mimetype || 'audio/m4a') as any;
+
+    const result = await model.generateContent([
+      { inlineData: { data: base64Audio, mimeType } },
+      'Transcribe this audio recording to text. Return only the transcribed words, nothing else.',
+    ]);
+
+    const text = result.response.text().trim();
+    console.log(`[STT] Transcribed: "${text.substring(0, 80)}"`);
+    res.json({ text });
+  } catch (err: any) {
+    console.error('[STT] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Mobile Push Notifications ──────────────────────────────────────
+import Expo, { type ExpoPushToken } from 'expo-server-sdk';
+
+const expoPush = new Expo();
+const PUSH_TOKENS_FILE = path.join(process.cwd(), 'data', 'push-tokens.json');
+
+function loadPushTokens(): string[] {
+  try {
+    if (!fs.existsSync(PUSH_TOKENS_FILE)) return [];
+    return JSON.parse(fs.readFileSync(PUSH_TOKENS_FILE, 'utf-8'));
+  } catch { return []; }
+}
+
+function savePushTokens(tokens: string[]): void {
+  const dir = path.dirname(PUSH_TOKENS_FILE);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(PUSH_TOKENS_FILE, JSON.stringify([...new Set(tokens)], null, 2));
+}
+
+async function sendPushNotification(title: string, body: string, data?: Record<string, any>): Promise<void> {
+  const tokens = loadPushTokens();
+  if (tokens.length === 0) return;
+
+  // categoryIdentifier enables inline action buttons (Approve/Reject/Resolve) on Android
+  const categoryIdentifier = (data?.type === 'proposal') ? 'proposal'
+    : (data?.type === 'blocker') ? 'blocker'
+    : undefined;
+
+  const messages = tokens
+    .filter(t => Expo.isExpoPushToken(t))
+    .map(to => ({
+      to: to as ExpoPushToken,
+      title,
+      body,
+      data: data ?? {},
+      sound: 'default' as const,
+      ...(categoryIdentifier ? { categoryId: categoryIdentifier } : {}),
+    }));
+
+  if (messages.length === 0) return;
+
+  try {
+    const chunks = expoPush.chunkPushNotifications(messages);
+    for (const chunk of chunks) {
+      await expoPush.sendPushNotificationsAsync(chunk);
+    }
+  } catch (e) {
+    console.error('[Push] Failed to send notification:', e);
+  }
+}
+
+// Register push token
+app.post('/api/push/register', (req, res) => {
+  const { token } = req.body;
+  if (!token || !Expo.isExpoPushToken(token)) {
+    return res.status(400).json({ error: 'Invalid Expo push token' });
+  }
+  const tokens = loadPushTokens();
+  if (!tokens.includes(token)) {
+    tokens.push(token);
+    savePushTokens(tokens);
+    console.log(`[Push] Registered token: ${token}`);
+  }
+  res.json({ success: true });
+});
+
+// Unregister push token (on logout or device change)
+app.delete('/api/push/register', (req, res) => {
+  const { token } = req.body;
+  const tokens = loadPushTokens().filter(t => t !== token);
+  savePushTokens(tokens);
+  res.json({ success: true });
+});
+
+// Trigger push for 5 key events
+eventBus.on('org:blocker:created', async (event: any) => {
+  const data = event.data ?? event;
+  const orgName = orgManager.get(data.blocker?.orgId)?.name ?? 'Org';
+  await sendPushNotification(
+    '⚠️ Blocker Raised',
+    `${orgName}: ${data.blocker?.title ?? 'Human action required'}`,
+    { type: 'blocker', orgId: data.blocker?.orgId, blockerId: data.blocker?.id },
+  );
+});
+
+eventBus.on('org:proposal:created', async (event: any) => {
+  const data = event.data ?? event;
+  const agentName = data.proposal?.agentLabel ?? 'Agent';
+  await sendPushNotification('📄 Review Required', `${agentName} submitted a proposal`, { type: 'proposal', orgId: data.proposal?.orgId, proposalId: data.proposal?.id });
+});
+
+eventBus.on('agent:worker_completed', async (event: any) => {
+  const data = event.data ?? event;
+  await sendPushNotification(
+    '✅ Task Done',
+    data.task?.substring(0, 80) ?? 'Sub-agent completed',
+    { type: 'task_complete', agentId: data.agentId },
+  );
+});
+
+eventBus.on('agent:worker_failed', async (event: any) => {
+  const data = event.data ?? event;
+  await sendPushNotification(
+    '❌ Worker Failed',
+    data.error?.substring(0, 80) ?? 'Sub-agent failed',
+    { type: 'worker_failed', agentId: data.agentId },
+  );
 });
 
 // ─── Graceful Shutdown ──────────────────────────────────────────────

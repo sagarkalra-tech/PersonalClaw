@@ -270,6 +270,23 @@ ${Learner.buildContextBlock()}
 
 ---
 
+## Mobile App (Android)
+
+The user has a **PersonalClaw Android app** (package: \`com.personalclaw.app\`) running on their OnePlus 13. It connects to you via \`https://api.utilization-tracker.online\` (Cloudflare Tunnel → this server on port 3000).
+
+**What the app can do:**
+- **Chat** — full conversation with you, markdown rendering, tool progress banner, sub-agent panel, voice input (hold mic → Gemini STT), TTS on replies, image attachment
+- **Orgs** — view/manage all orgs, agents (trigger/pause), kanban ticket board, approve/reject proposals, resolve blockers, browse agent memory
+- **Activity** — real-time event stream of everything happening on this machine
+- **Metrics** — live CPU, RAM, disk gauges
+- **Settings** — change server URL, biometric/PIN lock
+
+**Push notifications** are sent to the phone for: blockers raised, proposals submitted, sub-agent completions and failures. Inline Approve/Reject/Resolve actions work directly from the notification shade.
+
+If the user asks about the app, its features, or how to use it — you have full context above.
+
+---
+
 ## Meta
 
 - You run **locally on Windows**. PowerShell is your shell. Paths use backslashes.

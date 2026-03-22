@@ -9,18 +9,22 @@
 
 PersonalClaw is a **local-first AI automation platform** for Windows. It connects Google Gemini models to your desktop, browser, file system, and network through 20 skills (tools). It runs as a Node.js backend (port 3000) with a React dashboard (port 5173).
 
-**Three modes of operation:**
+**Five modes of operation:**
 
 1. **Human Chat** — Up to 3 independent chat panes, each with its own AI brain. You talk, the AI acts using tools.
 2. **Autonomous AI Organizations** — Create teams of AI agents (CEO, CTO, Developer, etc.) that run on cron schedules, manage tickets, delegate work, and submit code proposals for human review.
 3. **Scheduled Automation** — Cron jobs that trigger the AI to perform recurring tasks (post to Twitter, take screenshots, run reports).
+4. **Telegram** — Isolated Brain instance for remote control via the Telegram bot (no org access, separate history).
+5. **Android Mobile App** — React Native app (PersonalClawApp) connecting via Socket.io over Cloudflare Tunnel. Full chat, org management, push notifications, and voice input from anywhere.
 
 **Key facts:**
 - Platform: Windows 11 (PowerShell commands throughout)
 - AI Backend: Google Gemini (5-model failover chain)
 - Frontend: React 19 + Socket.io (real-time)
+- Mobile: React Native / Expo SDK 55 (Android)
 - Browser Control: Playwright + Chrome Extension Relay + Native Chrome CDP
-- Version: 12.7.2
+- Remote Access: Cloudflare Tunnel (`https://api.utilization-tracker.online`)
+- Version: 12.8.0
 - Author: Scout Kalra
 
 ---
@@ -173,6 +177,40 @@ PersonalClaw/
 │       ├── proposals.json          # Proposal metadata
 │       ├── blockers.json           # Blocker records
 │       └── notifications.jsonl     # Notification history
+├── PersonalClawApp/                # React Native / Expo SDK 55 Android app
+│   ├── app/
+│   │   ├── _layout.tsx             # Root layout — socket init, push notification handler, auth guard
+│   │   ├── auth.tsx                # Auth screen
+│   │   ├── (tabs)/
+│   │   │   ├── index.tsx           # Chat screen — voice input, TTS, image picker
+│   │   │   ├── activity.tsx        # Live activity feed
+│   │   │   ├── metrics.tsx         # Real-time metrics
+│   │   │   ├── orgs.tsx            # Org list
+│   │   │   └── settings.tsx        # Server URL config
+│   │   └── org/
+│   │       └── [orgId].tsx         # Org detail — 5-tab view (Agents/Tickets/Proposals/Blockers/Memory)
+│   ├── components/
+│   │   └── orgs/
+│   │       ├── AgentsView.tsx      # Agent list + status
+│   │       ├── TicketsView.tsx     # Kanban tickets
+│   │       ├── ProposalsView.tsx   # Pending/resolved proposals with Approve/Reject
+│   │       ├── BlockersView.tsx    # Open/resolved blockers with Mark Resolved
+│   │       └── MemoryView.tsx      # Memory browser — agent tabs, search, expandable
+│   ├── services/
+│   │   ├── socket.ts               # Socket.io client (polling+WS), event subscriptions
+│   │   ├── push-notifications.ts   # FCM token registration, notification categories
+│   │   └── voice.ts                # expo-audio recording + FormData upload to /api/voice/transcribe
+│   ├── store/                      # Zustand v5 stores
+│   │   └── index.ts                # Auth, Connection, Chat, Orgs, Activity, Metrics stores
+│   ├── constants/
+│   │   └── index.ts                # DEFAULT_SERVER_URL = https://api.utilization-tracker.online
+│   ├── android/
+│   │   ├── build.gradle            # Google Services classpath
+│   │   └── app/
+│   │       ├── build.gradle        # Google Services plugin + google-services.json
+│   │       └── google-services.json # Firebase FCM config (not committed)
+│   ├── app.json                    # Expo config (versionCode, bundleIdentifier)
+│   └── eas.json                    # EAS Build profiles (dev/preview/prod), autoIncrement, submit config
 ├── screenshots/                    # Vision + relay screenshots
 ├── outputs/                        # Generated PDFs + images
 ├── logs/
@@ -186,6 +224,61 @@ PersonalClaw/
     ├── ARCHITECTURE.md             # This document
     └── version_log.md              # Changelog
 ```
+
+---
+
+## Android Mobile App
+
+**Directory:** `PersonalClawApp/`
+
+React Native / Expo SDK 55 bare workflow app for Android. Connects to the backend over Cloudflare Tunnel so it works anywhere, not just on local WiFi.
+
+### Key Libraries
+| Library | Purpose |
+|---------|---------|
+| `expo-router` v4 | File-based navigation (tabs + stack) |
+| `expo-notifications` | Push notifications (FCM) |
+| `expo-audio` | Voice recording (hold-to-talk) |
+| `expo-speech` | TTS for AI responses |
+| `expo-image-picker` | Attach images to chat |
+| `expo-local-authentication` | Biometric auth |
+| `expo-secure-store` | Encrypted credential storage |
+| `socket.io-client` | Real-time backend connection |
+| `zustand` v5 | Global state management |
+| `react-native-safe-area-context` | Safe area handling |
+
+### Push Notification Flow
+```
+Backend sends push → Firebase FCM → Android device
+  → expo-notifications shows banner
+  → User taps inline button (Approve/Reject/Resolve) → socketService.send() acts silently
+  → User taps notification body → deep-link to relevant screen
+```
+
+**Notification categories:**
+- `proposal` — Approve + Reject inline actions → `org:proposal:action` socket event
+- `blocker` — Resolve inline action → `org:blocker:resolve` socket event
+- `chat_response`, `task_complete`, `worker_failed` — tap opens Chat tab
+
+### New REST Endpoints (added for mobile)
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/api/voice/transcribe` | Multer audio upload → Gemini STT → transcript |
+| `POST` | `/api/push/register` | Register Expo push token for FCM delivery |
+
+### New Socket Events (added for mobile)
+| Event | Direction | Purpose |
+|-------|-----------|---------|
+| `org:proposal:action` | Client→Server | Unified approve/reject handler |
+| `org:memory:list` | Client→Server | Scope-based agent memory list |
+| `org:tickets:list` | Client→Server | List tickets for an org |
+| `org:proposals:list` | Client→Server | List proposals for an org |
+| `org:blockers:list` | Client→Server | List blockers for an org |
+
+### Cloudflare Tunnel
+- Domain: `https://api.utilization-tracker.online`
+- Routes to: `localhost:3000`
+- Purpose: Remote access from mobile without VPN or port forwarding
 
 ---
 

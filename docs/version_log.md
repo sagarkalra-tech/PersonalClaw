@@ -2,6 +2,79 @@
 
 All notable changes to the PersonalClaw agent will be documented in this file.
 
+## [12.8.0] - 2026-03-22
+
+### Android Mobile App (PersonalClawApp)
+
+Full React Native / Expo SDK 55 Android app built from scratch — enables controlling PersonalClaw from anywhere via mobile.
+
+#### New: Android App (PersonalClawApp/)
+- **Expo SDK 55** bare workflow, React Native 0.83.2, expo-router v4 file-based navigation
+- **5-tab layout**: Chat, Activity, Metrics, Orgs, Settings
+- **Chat screen** — full conversation UI with markdown rendering, worker indicators, hold-to-talk voice input (expo-audio + Gemini STT), TTS toggle (expo-speech), image picker (expo-image-picker)
+- **Orgs screen** — lists all orgs with live status; taps through to Org Detail screen
+- **Org Detail screen** — 5-tab view per org: Agents, Tickets, Proposals, Blockers, Memory
+  - ProposalsView: pending/resolved proposals with inline Approve/Reject buttons
+  - BlockersView: open/resolved blockers with Mark Resolved confirmation dialog
+  - MemoryView: scoped memory browser with agent tabs, search, expandable entries
+- **Activity screen** — live event feed from the backend
+- **Metrics screen** — real-time system metrics (tokens, tool calls, uptime)
+- **Settings screen** — server URL config, connection indicator
+
+#### New: Real-time Connection (Socket.io)
+- Socket.io client with polling+WebSocket transport for mobile reliability
+- Zustand v5 global state: Auth, Connection, Chat, Orgs, Activity, Metrics stores
+- Handles all core socket events: `init`, `response`, `chat:tool_feed`, `agent:update`, `metrics`, `activity`, `org:list`, `org:created/updated/deleted`, `conversation:list/created`
+
+#### New: Push Notifications (Firebase FCM)
+- Firebase Cloud Messaging (FCM) via `google-services.json` + Google Services Gradle plugin
+- expo-notifications with Android notification channel
+- **Inline action categories**: Proposal notifications have Approve/Reject buttons; Blocker notifications have Resolve button — acts without opening the app
+- **Deep-link routing**: chat response push → Chat tab; blocker push → Org Blockers tab; proposal push → Org Proposals tab
+- Cold-start handling via `getLastNotificationResponseAsync()`
+
+#### New: Remote Access (Cloudflare Tunnel)
+- Cloudflare Tunnel configured at `https://api.utilization-tracker.online` pointing to backend port 3000
+- Default server URL updated — app connects from anywhere without being on local WiFi
+
+#### New: EAS Build
+- EAS Build configured with development/preview/production profiles
+- `autoIncrement: true` for automatic versionCode bumping
+- `eas submit` config with Google Play service account for Play Store upload
+
+#### Backend Changes (src/index.ts)
+- **New**: `POST /api/voice/transcribe` — multer audio upload + Gemini STT, returns transcript
+- **New**: `org:proposal:action` socket handler — unified approve/reject handler (was separate)
+- **New**: `org:memory:list` socket handler — scope-based agent memory retrieval
+- **Enhanced**: Push notifications now include `categoryId` (proposal/blocker inline actions), `blockerId` in blocker payloads, `agentId` in worker payloads
+- **New**: Push notification sent on chat response — strips markdown, sends preview to mobile
+
+#### Brain Update (src/core/brain.ts)
+- System prompt updated with `## Mobile App (Android)` section so Claw is aware of the app's capabilities, connection URL, and push notification behavior
+
+#### Infrastructure
+- `android/build.gradle` — added `classpath('com.google.gms:google-services:4.4.2')`
+- `android/app/build.gradle` — added `apply plugin: "com.google.gms.google-services"`
+- `android/local.properties` — created with correct Android SDK path
+- `app.json` — added `versionCode: 1`
+
+#### Files Changed
+- **New**: `PersonalClawApp/` — entire React Native app directory
+- **New**: `PersonalClawApp/services/push-notifications.ts` — FCM token registration, notification categories
+- **New**: `PersonalClawApp/services/voice.ts` — expo-audio recording + Gemini STT upload
+- **New**: `PersonalClawApp/services/socket.ts` — Socket.io client wrapper with Zustand integration
+- **New**: `PersonalClawApp/components/orgs/ProposalsView.tsx` — proposals UI
+- **New**: `PersonalClawApp/components/orgs/BlockersView.tsx` — blockers UI
+- **New**: `PersonalClawApp/components/orgs/MemoryView.tsx` — memory browser UI
+- **Updated**: `PersonalClawApp/app/_layout.tsx` — push notification init + deep-link handler
+- **Updated**: `PersonalClawApp/app/org/[orgId].tsx` — 5-tab org detail screen
+- **Updated**: `PersonalClawApp/constants/index.ts` — DEFAULT_SERVER_URL → Cloudflare URL
+- **Updated**: `src/index.ts` — voice endpoint, new socket handlers, push enhancements
+- **Updated**: `src/core/brain.ts` — mobile app awareness in system prompt
+- **Updated**: `PersonalClawApp/eas.json` — production build + submit config
+
+---
+
 ## [12.7.2] - 2026-03-21
 
 ### Todos — Critical Fixes & Recurring Template UI

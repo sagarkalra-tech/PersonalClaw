@@ -6,7 +6,7 @@ For the full technical deep-dive (every interface, every event, every endpoint),
 
 ---
 
-## Project Structure (v12.7.2)
+## Project Structure (v12.8.0)
 
 ```
 PersonalClaw/
@@ -118,6 +118,24 @@ PersonalClaw/
 │   ├── xteacher.py                 # Record mouse clicks for automation
 │   ├── twitter_steps.json          # Recorded click coordinates
 │   └── Post_content.txt            # Tweet content buffer
+├── PersonalClawApp/                # React Native / Expo SDK 55 Android app
+│   ├── app/
+│   │   ├── _layout.tsx             # Root layout — socket init, push notification handler, auth guard
+│   │   ├── (tabs)/
+│   │   │   ├── index.tsx           # Chat screen — voice (hold-to-talk), TTS, image picker
+│   │   │   ├── activity.tsx        # Live activity feed
+│   │   │   ├── metrics.tsx         # Real-time metrics
+│   │   │   ├── orgs.tsx            # Org list
+│   │   │   └── settings.tsx        # Server URL + connection status
+│   │   └── org/[orgId].tsx         # Org detail — 5 tabs: Agents/Tickets/Proposals/Blockers/Memory
+│   ├── components/orgs/            # ProposalsView, BlockersView, MemoryView, AgentsView, TicketsView
+│   ├── services/
+│   │   ├── socket.ts               # Socket.io client (polling+WS transport)
+│   │   ├── push-notifications.ts   # FCM token + notification categories (Approve/Reject/Resolve)
+│   │   └── voice.ts                # expo-audio recording + Gemini STT upload
+│   ├── store/index.ts              # Zustand v5: Auth, Connection, Chat, Orgs, Activity, Metrics
+│   ├── constants/index.ts          # DEFAULT_SERVER_URL = https://api.utilization-tracker.online
+│   └── eas.json                    # EAS Build profiles + autoIncrement + Google Play submit
 ├── screenshots/                    # Vision + relay screenshots
 ├── outputs/                        # Generated PDFs + images
 ├── logs/                           # twitter_post.log, activity.jsonl, daily server logs
@@ -132,8 +150,8 @@ PersonalClaw/
 ## Architecture at a Glance
 
 ```
-Dashboard (:5173) ←──Socket.io──→ Express Server (:3000)
-                                       │
+Dashboard (:5173) ←──Socket.io──→ Express Server (:3000) ←──Socket.io──→ Android App
+                                       │                                  (Cloudflare Tunnel)
                     ┌──────────────────┼──────────────────┐
                     │                  │                  │
              ConversationMgr      OrgManager         Relay (/relay)
@@ -149,13 +167,38 @@ Telegram (Telegraf) ──polling──→ telegramBrain (isolated Brain)
                                   │
                              20 Skills (NO org skills)
                              Separate history, no persistence
+
+Android App (PersonalClawApp) ──Socket.io over Cloudflare Tunnel──→ Express Server
+  • Full chat with voice input (Gemini STT) + TTS
+  • Org management: Tickets, Proposals (approve/reject), Blockers (resolve), Memory browser
+  • Push notifications via Firebase FCM with inline action buttons
+  • EAS Build → Google Play Store
 ```
 
-**Four operation modes:**
+**Five operation modes:**
 1. **Human Chat** — Up to 3 chat panes, each with its own Brain instance
 2. **Autonomous Orgs** — AI agent teams on cron schedules with tickets, delegation, proposals
 3. **Scheduled Tasks** — Cron jobs that trigger the Brain to perform recurring work
-4. **Telegram** — Isolated Brain for remote control via mobile (no org access, no persistence)
+4. **Telegram** — Isolated Brain for remote control via Telegram bot (no org access, no persistence)
+5. **Android App** — React Native mobile app connecting via Cloudflare Tunnel; full chat + org management + push notifications + voice input
+
+---
+
+## Android App (PersonalClawApp)
+
+- **Stack**: React Native 0.83.2, Expo SDK 55, expo-router v4, Zustand v5, Socket.io client
+- **Remote access**: Cloudflare Tunnel at `https://api.utilization-tracker.online` → backend :3000
+- **Push**: Firebase FCM via `google-services.json`; inline Approve/Reject/Resolve action buttons
+- **Voice**: expo-audio hold-to-talk → `POST /api/voice/transcribe` → Gemini STT → auto-send
+- **TTS**: expo-speech reads AI replies aloud (toggle per conversation)
+- **New backend endpoints added for app**:
+  - `POST /api/voice/transcribe` — multer audio upload → Gemini STT
+  - `POST /api/push/register` — store Expo push token
+- **New socket handlers added for app**:
+  - `org:proposal:action` — unified approve/reject
+  - `org:memory:list` — scope-based memory retrieval
+  - `org:tickets:list`, `org:proposals:list`, `org:blockers:list`
+- **Brain awareness**: system prompt includes `## Mobile App (Android)` section so Claw knows the app exists and can answer questions about it
 
 ---
 
