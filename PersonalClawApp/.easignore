@@ -1,0 +1,12 @@
+# EAS ignore
+node_modules/
+.expo/
+dist/
+build/
+android/
+ios/
+
+# Include assets
+!assets/
+!assets/*.png
+!assets/**/*.png
