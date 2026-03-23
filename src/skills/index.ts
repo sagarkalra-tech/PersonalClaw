@@ -18,6 +18,7 @@ import { orgManagementSkill } from './org-management-skill.js';
 import { linkedinSkill } from './linkedin.js';
 import { twitterSkill } from './twitter.js';
 import { todosSkill } from './todos.js';
+import { desktopAutomationSkill } from './desktop-automation.js';
 import { Skill, SkillMeta } from '../types/skill.js';
 
 export const skills: Skill[] = [
@@ -40,6 +41,7 @@ export const skills: Skill[] = [
   linkedinSkill,
   twitterSkill,
   todosSkill,
+  desktopAutomationSkill,
 ];
 
 export { initScheduler };

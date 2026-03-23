@@ -6,7 +6,7 @@ For the full technical deep-dive (every interface, every event, every endpoint),
 
 ---
 
-## Project Structure (v12.8.0)
+## Project Structure (v12.9.0)
 
 ```
 PersonalClaw/
@@ -30,9 +30,11 @@ PersonalClaw/
 │   │   ├── browser.ts              # BrowserManager — Playwright + native Chrome CDP
 │   │   ├── chrome-mcp.ts           # Chrome 146+ native MCP / CDP adapter
 │   │   ├── relay.ts                # Chrome Extension WebSocket relay (/relay path)
+│   │   ├── mcp.ts                  # Playwright MCP server adapter
 │   │   ├── audit.ts                # JSONL audit logging with rotation
 │   │   ├── sessions.ts             # Session save/restore/search
 │   │   ├── learner.ts              # Self-learning engine (async, uses gemini-2.5-flash)
+│   │   ├── terminal-logger.ts      # Console tee to daily rolling file
 │   │   └── telegram-brain.ts       # Isolated Telegram Brain instance
 │   ├── interfaces/
 │   │   └── telegram.ts             # Telegraf bot — polling, retry, markdown formatting, typing indicator
@@ -57,7 +59,8 @@ PersonalClaw/
 │       ├── scheduler.ts            # manage_scheduler — cron job management
 │       ├── linkedin.ts             # linkedin_post — pyautogui replay automation
 │       ├── twitter.ts              # twitter_post — relay + vision pre-flight + pyautogui
-│       └── todos.ts                # manage_todos — personal todo list (12 actions, read-write lock)
+│       ├── todos.ts                # manage_todos — personal todo list (12 actions, read-write lock)
+│       └── desktop-automation.ts   # desktop_automation — pywinauto Windows app automation (10 actions)
 ├── dashboard/                      # React 19 + Vite frontend (port 5173)
 │   ├── vite.config.ts              # Vite config — proxies /api → http://localhost:3000 (required for REST calls)
 │   └── src/
@@ -240,6 +243,7 @@ interface SkillMeta {
 |----------|------|---------|---------|
 | `browser_vision` | Exclusive | 60s | browser, vision |
 | `clipboard` | Exclusive | 5s | clipboard |
+| `desktop` | Exclusive | 30s | desktop_automation |
 | `memory` | Read-Write | 5s | memory, org memory skills |
 | `scheduler` | Read-Write | 5s | scheduler |
 | `todos` | Read-Write | 5s | todos |
@@ -317,7 +321,7 @@ export const skills: Skill[] = [ ..., mySkill ];
 | Shared memory | `org-skills.ts` | `shared_memory.json` |
 | Notifications | `org-notification-store.ts` | `notifications.jsonl` |
 
-**Org agent restrictions:** Cannot use `execute_powershell`, `run_python_script`, or `manage_scheduler`. Protected file writes are intercepted and routed to proposal system.
+**Org agent restrictions:** Cannot use `execute_powershell`, `run_python_script`, `manage_scheduler`, or `desktop_automation`. Protected file writes are intercepted and routed to proposal system.
 
 ---
 

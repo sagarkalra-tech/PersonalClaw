@@ -19,6 +19,30 @@ export interface RelayTab {
   title: string;
   active: boolean;
   windowId: number;
+  protected?: boolean;
+}
+
+const PROTECTED_PREFIXES = [
+  'chrome://',
+  'chrome-extension://',
+  'devtools://',
+  'edge://',
+  'about:',
+  'brave://',
+];
+
+/** Returns true if the tab URL belongs to a browser-internal page. */
+export function isProtectedTab(tab: RelayTab): boolean {
+  if (!tab.url) return true;
+  return PROTECTED_PREFIXES.some((p) => tab.url.startsWith(p));
+}
+
+/** Pick the best non-protected tab: prefer the active one, then the first safe one. */
+export function getBestDefaultTabId(tabs: RelayTab[]): number | null {
+  const safe = tabs.filter((t) => !isProtectedTab(t));
+  const active = safe.find((t) => t.active);
+  if (active) return active.id;
+  return safe.length > 0 ? safe[0].id : null;
 }
 
 interface PendingCommand {
@@ -40,7 +64,7 @@ export class ExtensionRelay {
   }
 
   get currentTabs(): RelayTab[] {
-    return this.tabs;
+    return this.tabs.map((t) => ({ ...t, protected: isProtectedTab(t) }));
   }
 
   /**
@@ -133,31 +157,52 @@ export class ExtensionRelay {
     });
   }
 
+  // ─── Tab Safety ─────────────────────────────────────────────────
+
+  /**
+   * Resolve a safe tab ID: use the given tabId if it's not protected,
+   * otherwise fall back to the best non-protected tab.
+   * Throws if no safe tab is available.
+   */
+  private resolveTabId(tabId?: number): number {
+    if (tabId !== undefined) {
+      const tab = this.tabs.find((t) => t.id === tabId);
+      if (!tab || !isProtectedTab(tab)) return tabId;
+      // Caller asked for a protected tab — fall through to default
+    }
+    const best = getBestDefaultTabId(this.tabs);
+    if (best !== null) return best;
+    throw new Error(
+      'No safe (non-protected) tab available. Open a new tab first with relay_open_tab.',
+    );
+  }
+
   // ─── Convenience Methods ────────────────────────────────────────
 
   async listTabs(): Promise<RelayTab[]> {
     const result = await this.executeCommand('list_tabs');
-    return result || this.tabs;
+    const tabs: RelayTab[] = result || this.tabs;
+    return tabs.map((t) => ({ ...t, protected: isProtectedTab(t) }));
   }
 
   async navigate(url: string, tabId?: number): Promise<any> {
-    return this.executeCommand('navigate', { url, tabId });
+    return this.executeCommand('navigate', { url, tabId: this.resolveTabId(tabId) });
   }
 
   async click(target: string, tabId?: number): Promise<any> {
-    return this.executeCommand('click', { target, tabId });
+    return this.executeCommand('click', { target, tabId: this.resolveTabId(tabId) });
   }
 
   async type(target: string, text: string, tabId?: number): Promise<any> {
-    return this.executeCommand('type', { target, text, tabId });
+    return this.executeCommand('type', { target, text, tabId: this.resolveTabId(tabId) });
   }
 
   async scrape(tabId?: number, maxLength?: number): Promise<any> {
-    return this.executeCommand('scrape', { tabId, maxLength });
+    return this.executeCommand('scrape', { tabId: this.resolveTabId(tabId), maxLength });
   }
 
   async screenshot(tabId?: number): Promise<any> {
-    return this.executeCommand('screenshot', { tabId });
+    return this.executeCommand('screenshot', { tabId: this.resolveTabId(tabId) });
   }
 
   async switchTab(tabId: number): Promise<any> {
@@ -173,15 +218,15 @@ export class ExtensionRelay {
   }
 
   async evaluate(code: string, tabId?: number): Promise<any> {
-    return this.executeCommand('evaluate', { code, tabId });
+    return this.executeCommand('evaluate', { code, tabId: this.resolveTabId(tabId) });
   }
 
   async scroll(direction: string, amount?: number, tabId?: number): Promise<any> {
-    return this.executeCommand('scroll', { direction, amount, tabId });
+    return this.executeCommand('scroll', { direction, amount, tabId: this.resolveTabId(tabId) });
   }
 
   async getElements(selector?: string, tabId?: number): Promise<any> {
-    return this.executeCommand('get_elements', { selector, tabId });
+    return this.executeCommand('get_elements', { selector, tabId: this.resolveTabId(tabId) });
   }
 
   async highlight(target: string, color?: string, tabId?: number): Promise<any> {

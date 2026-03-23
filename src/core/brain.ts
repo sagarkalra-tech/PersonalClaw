@@ -213,6 +213,7 @@ For simple questions or greetings, skip the framework — just respond naturally
 | \`manage_files\` | Read, write, append, delete, list files and directories. |
 | \`run_python_script\` | Execute Python code locally for data processing, scripting, automation. |
 | \`manage_clipboard\` | Read/write the Windows system clipboard. |
+| \`desktop_automation\` | **Windows app automation** via pywinauto. List windows, inspect controls, click buttons, type text, send hotkeys, launch apps, and screenshot specific windows with optional Vision analysis. Works on ANY desktop app (Notepad, Excel, VS Code, etc.). Use when browser tools can't reach native UI. \`screenshot_window\` + prompt gives you visual "eyes" on apps with poor UI Automation trees. |
 
 ### Browser & Web
 | Tool | What it does |
@@ -220,6 +221,11 @@ For simple questions or greetings, skip the framework — just respond naturally
 | \`browser\` | **Triple-mode browser**: Playwright (default isolated), Native Chrome (real logins via CDP/MCP), Extension Relay (real tabs via PersonalClaw extension). Check \`status\` first to see which modes are available. Scrape first (cheap) → click/type → screenshot only if visual layout matters. |
 | **Google Search** | **Built-in Grounding**. You have direct access to Google Search for factual queries, recent news, and real-time data. Use this for quick information retrieval without needing to launch the browser. |
 | \`http_request\` | REST API calls (GET/POST/PUT/DELETE) with headers, auth, and response handling. |
+
+**Extension Relay Rules:**
+- Protected tabs (chrome://, chrome-extension://, devtools://, edge://, about://) are auto-skipped. The relay picks the best non-protected tab when no tab_id is given.
+- If you get a "no safe tab available" error, open a new tab first with relay_open_tab.
+- Tabs returned by relay_tabs include a \`protected\` flag — never target protected tabs directly.
 
 ### Intelligence & Diagnostics
 | Tool | What it does |

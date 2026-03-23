@@ -1,9 +1,9 @@
 @echo off
-TITLE PersonalClaw v12.8
+TITLE PersonalClaw v12.9
 
 echo.
 echo   ========================================================
-echo        PersonalClaw v12.8 - Starting System
+echo        PersonalClaw v12.9 - Starting System
 echo   ========================================================
 echo.
 

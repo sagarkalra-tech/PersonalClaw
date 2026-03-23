@@ -56,7 +56,7 @@ PersonalClaw is a **local-first AI automation platform** for Windows. It connect
 │  │  shell • python • files • vision • clipboard • memory      │ │
 │  │  browser • http • network • processes • sysinfo • pdf      │ │
 │  │  imagegen • agent-spawn • org-management • scheduler       │ │
-│  │  linkedin • twitter • todos  +  13 org-specific skills     │ │
+│  │  linkedin • twitter • todos • desktop  + 13 org-specific   │ │
 │  └────────────────────────────────────────────────────────────┘ │
 │                                                                 │
 │  ┌──────────┐ ┌──────────┐ ┌─────────┐ ┌───────────┐          │
@@ -90,11 +90,13 @@ PersonalClaw/
 │   │   ├── browser.ts              # BrowserManager (Playwright + native Chrome)
 │   │   ├── chrome-mcp.ts           # Chrome 146+ native MCP / CDP adapter
 │   │   ├── relay.ts                # Chrome Extension WebSocket relay
+│   │   ├── mcp.ts                  # Playwright MCP server adapter
 │   │   ├── skill-lock.ts           # Concurrent resource protection
 │   │   ├── events.ts               # EventBus (45+ typed events)
 │   │   ├── audit.ts                # JSONL audit logging with rotation
 │   │   ├── sessions.ts             # Session save/restore/search
 │   │   ├── learner.ts              # Self-learning engine (async analysis)
+│   │   ├── terminal-logger.ts      # Console tee to daily rolling file
 │   │   └── telegram-brain.ts       # Telegram bot interface (isolated Brain)
 │   └── skills/
 │       ├── index.ts                # Skill registry + handleToolCall dispatcher
@@ -117,7 +119,8 @@ PersonalClaw/
 │       ├── linkedin.ts             # linkedin_post
 │       ├── twitter.ts              # twitter_post
 │       ├── scheduler.ts            # manage_scheduler
-│       └── todos.ts                # manage_todos (12 actions, read-write lock)
+│       ├── todos.ts                # manage_todos (12 actions, read-write lock)
+│       └── desktop-automation.ts   # desktop_automation (8 actions, pywinauto)
 ├── dashboard/
 │   ├── vite.config.ts              # Vite config — proxies /api → http://localhost:3000
 │   └── src/
@@ -441,7 +444,7 @@ Read/write system clipboard via `clipboardy`. **Exclusive lock** on `clipboard`.
 
 | Action | Params | Returns |
 |--------|--------|---------|
-| `relay_tabs` | — | Array of `{id, url, title, active, windowId}` |
+| `relay_tabs` | — | Array of `{id, url, title, active, windowId, protected}` |
 | `relay_navigate` | `url`, `tab_id?` | `{title, url}` |
 | `relay_click` | `target` (text/selector), `tab_id?` | `{clicked, tag, text}` |
 | `relay_type` | `target`, `text`, `tab_id?` | `{typed, field, length}` |
@@ -459,6 +462,8 @@ Read/write system clipboard via `clipboardy`. **Exclusive lock** on `clipboard`.
 **Native Chrome actions:** `connect_native`, `disconnect_native`, `status`, `chrome_call`
 
 **Lock:** Exclusive on `browser_vision` (shared with vision skill).
+
+**Tab Protection:** The relay auto-skips protected tabs (`chrome://`, `chrome-extension://`, `devtools://`, `edge://`, `about:`, `brave://`). When no `tab_id` is given, `resolveTabId()` picks the best non-protected tab (prefers active, then first safe). If no safe tab exists, returns an error suggesting `relay_open_tab`. Tab listings include a `protected` boolean flag. Helper functions `isProtectedTab()` and `getBestDefaultTabId()` are exported from `relay.ts`.
 
 ### 8. HTTP — `http_request`
 
@@ -535,7 +540,28 @@ Fully automated X/Twitter posting via the extension relay:
 
 Params: `content` (max 280 chars), `dry_run`. Requires extension relay + `twitter_steps.json`.
 
-### 19. Scheduler — `manage_scheduler`
+### 19. Desktop Automation — `desktop_automation`
+
+**Windows native app automation** via pywinauto (UIA backend). Requires `pip install pywinauto` and `pip install Pillow` (for window screenshots). Each action builds a Python script, executes it with a 30-second subprocess timeout, and parses JSON output. **Exclusive lock** on `desktop`.
+
+| Action | Params | Behavior |
+|--------|--------|----------|
+| `list_windows` | — | List all visible top-level windows (title, handle, rect, process_id) |
+| `focus_window` | `title` | Bring a window to foreground by partial title match |
+| `inspect_controls` | `title`, `depth?` (default 3) | List all UI controls in a window (name, type, auto_id, rect, enabled) |
+| `click_control` | `title`, `control`, `click_type?` | Click a control by name/auto_id. Supports left/right/double |
+| `type_text` | `title`, `control`, `text`, `clear_first?` | Type text into an input control |
+| `get_text` | `title`, `control` | Read text content from a control |
+| `send_keys` | `title`, `keys` | Send keyboard shortcuts (pywinauto syntax, e.g. `{VK_CONTROL down}s{VK_CONTROL up}`) |
+| `wait_for_window` | `title`, `timeout?` (default 10s) | Wait for a window to appear |
+| `launch_app` | `app_path`, `app_args?`, `title?`, `timeout?` | Launch an application, wait for its window, return handle + rect + PID. If `title` is omitted, derives match from the app filename |
+| `screenshot_window` | `title`, `prompt?` | Capture a screenshot of just a specific window (using PIL ImageGrab on the window rect). If `prompt` is given, sends the screenshot to Gemini Vision for analysis and returns the AI response alongside the image path. Gives visual "eyes" on any native app |
+
+**Use when:** You need to interact with native Windows apps (Notepad, Excel, VS Code, File Explorer, Settings, etc.) — anything that browser tools can't reach. Use `screenshot_window` with a prompt for apps with poor UI Automation trees (Java Swing, Delphi, custom GDI) where `inspect_controls` returns unhelpful results.
+
+**Not available to org agents** (filtered alongside `execute_powershell` and `run_python_script`).
+
+### 20. Scheduler — `manage_scheduler`
 
 | Action | Lock | Behavior |
 |--------|------|----------|
@@ -545,7 +571,7 @@ Params: `content` (max 280 chars), `dry_run`. Requires extension relay + `twitte
 
 Jobs persisted to `memory/scheduled_jobs.json`. When cron fires, sends `[INTERNAL_SCHEDULER] Periodic Task Execution: {command}` to the Brain.
 
-### 20. Todos — `manage_todos`
+### 21. Todos — `manage_todos`
 
 | Action | Lock | Behavior |
 |--------|------|----------|
@@ -582,6 +608,7 @@ Prevents concurrent access to shared resources in multi-agent execution.
 |-----|------|---------|---------|
 | `browser_vision` | Exclusive | 60s | browser, vision |
 | `clipboard` | Exclusive | 5s | clipboard |
+| `desktop` | Exclusive | 30s | desktop_automation |
 | `memory` | Read-Write | 5s | memory, org_read/write_memory |
 | `scheduler` | Read-Write | 5s | scheduler |
 | `todos` | Read-Write | 5s | todos |
@@ -670,7 +697,7 @@ When an agent runs (cron/manual/event/chat):
    - Task queue + memory + shared memory
    - Human comments on workspace files
    - 11-step workflow: read memory → check tickets → create ticket → execute → report
-3. **Filter tools**: remove `execute_powershell`, `run_python_script`, `manage_scheduler` (safety)
+3. **Filter tools**: remove `execute_powershell`, `run_python_script`, `manage_scheduler`, `desktop_automation` (safety)
 4. **Inject org skills**: 13 org-specific tools
 5. **Tool interception**: write operations checked against protection list
 6. Process message → log run to `runs.jsonl`
@@ -965,7 +992,7 @@ Socket.io connects directly to `http://localhost:3000` (hardcoded in `App.tsx`) 
 | **System Metrics** | CPU/RAM/disk sparklines, session info |
 | **Activity Feed** | Real-time event stream with color-coded dots |
 | **Todos** | Personal task manager — stats, filters, add form, inline edit, focus mode, recurring |
-| **Skills & Config** | All 20 skills listed, quick command cards |
+| **Skills & Config** | All 21 skills listed, quick command cards |
 | **Orgs** | Organization management workspace |
 
 ### Org Workspace Sub-Tabs
@@ -1140,8 +1167,8 @@ export const skills: Skill[] = [ ..., mySkill ];
 |-------|-----------|
 | **File Protection** | Git-tracked or manually specified files require code proposal workflow |
 | **Org Isolation** | Each org has separate workspace, memory, browser profile |
-| **Tool Filtering** | Org agents cannot use `execute_powershell`, `run_python_script`, `manage_scheduler` |
-| **Skill Locks** | Prevent concurrent access to browser, clipboard, memory |
+| **Tool Filtering** | Org agents cannot use `execute_powershell`, `run_python_script`, `manage_scheduler`, `desktop_automation` |
+| **Skill Locks** | Prevent concurrent access to browser, clipboard, desktop, memory |
 | **Ticket System** | In-progress tickets bound to assignee |
 | **Proposal Limits** | Max 3 pending proposals per agent, stale after 7 days |
 | **Delegation Depth** | Max 5 delegation hops (prevents infinite loops) |
@@ -1152,4 +1179,4 @@ export const skills: Skill[] = [ ..., mySkill ];
 
 ---
 
-*Last updated: 2026-03-21 — PersonalClaw v12.7.2*
+*Last updated: 2026-03-23 — PersonalClaw v12.8.0*

@@ -1,11 +1,11 @@
 @echo off
 setlocal enabledelayedexpansion
 
-TITLE PersonalClaw v12.8 - Setup Wizard
+TITLE PersonalClaw v12.9 - Setup Wizard
 
 echo.
 echo   ========================================================
-echo        PersonalClaw v12.8 - Setup Wizard
+echo        PersonalClaw v12.9 - Setup Wizard
 echo   ========================================================
 echo.
 
@@ -21,8 +21,20 @@ if %errorlevel% neq 0 (
 for /f "tokens=*" %%v in ('node --version') do echo [OK] Node.js %%v detected.
 echo.
 
+:: ─── Check Python ────────────────────────────────────────────
+where python >nul 2>nul
+if %errorlevel% neq 0 (
+    echo [WARNING] Python is not installed!
+    echo Some skills (desktop automation, twitter posting, python scripts) require Python.
+    echo Download from: https://www.python.org/downloads/
+    echo.
+) else (
+    for /f "tokens=*" %%v in ('python --version 2^>^&1') do echo [OK] %%v detected.
+)
+echo.
+
 :: ─── 1. Backend Dependencies ─────────────────────────────────
-echo [1/6] Installing backend dependencies...
+echo [1/7] Installing backend dependencies...
 call npm install
 if %errorlevel% neq 0 (
     echo [WARNING] npm install had issues. Some native modules may need build tools.
@@ -34,16 +46,16 @@ echo.
 set /p SETUP_PLAYWRIGHT="Install Playwright browser for automation? (y/n) [y]: "
 if "%SETUP_PLAYWRIGHT%"=="" set SETUP_PLAYWRIGHT=y
 if /i "%SETUP_PLAYWRIGHT%"=="y" (
-    echo [2/6] Installing Playwright Chromium...
+    echo [2/7] Installing Playwright Chromium...
     call npx playwright install chromium
     if %errorlevel% neq 0 echo [WARNING] Playwright install failed. Browser skills won't work.
 ) else (
-    echo [2/6] Skipped Playwright.
+    echo [2/7] Skipped Playwright.
 )
 echo.
 
 :: ─── 3. Dashboard Dependencies ──────────────────────────────
-echo [3/6] Installing dashboard dependencies...
+echo [3/7] Installing dashboard dependencies...
 if exist dashboard (
     cd dashboard
     call npm install
@@ -54,8 +66,29 @@ if exist dashboard (
 )
 echo.
 
-:: ─── 4. Environment Config ──────────────────────────────────
-echo [4/6] Configuring environment...
+:: ─── 4. Python Dependencies ─────────────────────────────────
+where python >nul 2>nul
+if %errorlevel% equ 0 (
+    set /p SETUP_PYTHON="Install Python packages (pywinauto, Pillow)? Required for desktop automation. (y/n) [y]: "
+    if "!SETUP_PYTHON!"=="" set SETUP_PYTHON=y
+    if /i "!SETUP_PYTHON!"=="y" (
+        echo [4/7] Installing Python dependencies...
+        python -m pip install pywinauto Pillow --quiet
+        if %errorlevel% neq 0 (
+            echo [WARNING] Python package install failed. Desktop automation skill won't work.
+        ) else (
+            echo [OK] pywinauto + Pillow installed.
+        )
+    ) else (
+        echo [4/7] Skipped Python packages.
+    )
+) else (
+    echo [4/7] Skipped Python packages (Python not found).
+)
+echo.
+
+:: ─── 5. Environment Config ──────────────────────────────────
+echo [5/7] Configuring environment...
 if not exist .env (
     if exist .env.example (
         copy .env.example .env >nul
@@ -78,7 +111,7 @@ if not "!GEMINI_KEY!"=="" (
 )
 echo.
 
-:: ─── 5. Telegram (Optional) ─────────────────────────────────
+:: ─── 6. Telegram (Optional) ─────────────────────────────────
 set /p SETUP_TG="Set up Telegram bot for remote control? (y/n) [n]: "
 if "%SETUP_TG%"=="" set SETUP_TG=n
 if /i "%SETUP_TG%"=="y" (
@@ -96,15 +129,15 @@ if /i "%SETUP_TG%"=="y" (
         echo [OK] Telegram configured.
     )
 ) else (
-    echo [5/6] Skipped Telegram setup.
+    echo [6/7] Skipped Telegram setup.
 )
 echo.
 
-:: ─── 6. Android App (Optional) ──────────────────────────────
+:: ─── 7. Android App (Optional) ──────────────────────────────
 set /p SETUP_ANDROID="Set up Android mobile app? (y/n) [n]: "
 if "%SETUP_ANDROID%"=="" set SETUP_ANDROID=n
 if /i "%SETUP_ANDROID%"=="y" (
-    echo [6/6] Installing Android app dependencies...
+    echo [7/7] Installing Android app dependencies...
     if exist PersonalClawApp (
         cd PersonalClawApp
         call npm install
@@ -124,7 +157,7 @@ if /i "%SETUP_ANDROID%"=="y" (
         echo [WARNING] PersonalClawApp directory not found! Skipping.
     )
 ) else (
-    echo [6/6] Skipped Android app setup.
+    echo [7/7] Skipped Android app setup.
 )
 echo.
 
@@ -149,5 +182,7 @@ echo     Chrome Extension:       Load extension/ folder in chrome://extensions
 echo     Android App:            cd PersonalClawApp ^&^& npx expo run:android
 echo     Remote Access:          See docs/SETUP_GUIDE.md (Cloudflare Tunnel)
 echo     Full Documentation:     docs/ARCHITECTURE.md
+echo.
+echo   Skills: 20 registered (incl. desktop automation, browser, vision, etc.)
 echo.
 pause

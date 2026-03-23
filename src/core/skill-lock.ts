@@ -11,7 +11,7 @@
 
 import { eventBus } from './events.js';
 
-export type ExclusiveLockKey = 'browser_vision' | 'clipboard';
+export type ExclusiveLockKey = 'browser_vision' | 'clipboard' | 'desktop';
 export type ReadWriteLockKey = 'memory' | 'scheduler' | 'todos' | `files:${string}`;
 export type AnyLockKey = ExclusiveLockKey | ReadWriteLockKey;
 
@@ -33,6 +33,7 @@ export interface LockStatus {
 const LOCK_TIMEOUTS: Record<string, number> = {
   browser_vision: 60_000,
   clipboard: 5_000,
+  desktop: 30_000,
   memory: 5_000,
   scheduler: 5_000,
   todos: 5_000,
@@ -159,7 +160,7 @@ class SkillLockManager {
   }
 
   getStatus(key: AnyLockKey): LockStatus {
-    if (key === 'browser_vision' || key === 'clipboard') {
+    if (key === 'browser_vision' || key === 'clipboard' || key === 'desktop') {
       const holder = this.exclusiveHolders.get(key);
       return {
         key, type: holder ? 'exclusive' : 'free',

@@ -2,6 +2,57 @@
 
 All notable changes to the PersonalClaw agent will be documented in this file.
 
+## [12.9.0] - 2026-03-23
+
+### Relay Tab Protection + Desktop Automation Skill
+
+#### New: `src/skills/desktop-automation.ts` — `desktop_automation` Skill
+- **Windows native app automation** via pywinauto (UIA backend) — automate ANY desktop app, not just browsers
+- 10 actions: `list_windows`, `focus_window`, `inspect_controls`, `click_control`, `type_text`, `get_text`, `send_keys`, `wait_for_window`, `launch_app`, `screenshot_window`
+- **`launch_app`**: Launch any application by path/name, optionally pass args, wait for its window to appear, return handle + PID + rect. Title match auto-derived from app filename if not provided
+- **`screenshot_window`**: Capture just a specific window's region via PIL ImageGrab + optional Gemini Vision analysis. Gives "eyes" on any native app — useful for legacy apps with poor UI Automation trees (Java Swing, Delphi, custom GDI)
+- Each action generates a Python script, writes to a temp file, executes with 30-second subprocess timeout, parses JSON output, cleans up
+- `escapePy()` helper safely injects string parameters into Python code
+- **Exclusive `desktop` lock** (30s timeout) — registered in `skill-lock.ts`
+- **Blocked for org agents** — filtered alongside `execute_powershell` and `run_python_script`
+- `pywinauto 0.6.9` installed (`pip install pywinauto`), `Pillow 11.3.0` already available
+
+#### Changed: `src/core/relay.ts` — Protected Tab Safety
+- Added `PROTECTED_PREFIXES` constant: `chrome://`, `chrome-extension://`, `devtools://`, `edge://`, `about:`, `brave://`
+- **`isProtectedTab(tab)`** — exported helper, returns true if tab URL matches any protected prefix or has no URL
+- **`getBestDefaultTabId(tabs)`** — exported helper, picks best non-protected tab (prefers active, then first safe, then null)
+- **`resolveTabId(tabId?)`** — private method used by all relay content methods; validates given tabId isn't protected, falls back to best default, throws descriptive error if no safe tab available
+- `RelayTab` interface now includes `protected?: boolean`
+- `currentTabs` getter and `listTabs()` now tag each tab with `protected: boolean`
+- All relay content methods updated to use `resolveTabId`: `navigate`, `click`, `type`, `scrape`, `screenshot`, `evaluate`, `scroll`, `getElements`
+- `switchTab`, `openTab`, `closeTab`, `highlight` unchanged (explicit required IDs or no tab content targeting)
+
+#### Changed: `src/core/brain.ts`
+- Added `desktop_automation` row to the Execution skills table in system prompt
+- Added **Extension Relay Rules** block after `http_request` — documents protected tab auto-skip, "no safe tab" recovery flow (`relay_open_tab`), and the `protected` flag on tab listings
+
+#### Changed: `src/core/skill-lock.ts`
+- Added `'desktop'` to `ExclusiveLockKey` type union
+- Added `desktop: 30_000` to `LOCK_TIMEOUTS`
+
+#### Changed: `src/skills/index.ts`
+- Registered `desktopAutomationSkill` (19 → 20 skills)
+
+#### Changed: `src/core/org-agent-runner.ts`
+- Added `desktop_automation` to `filterTools()` in `createOrgAgentBrain()`
+- Updated disabled-tool text in both `buildOrgAgentSystemPrompt` and `buildOrgAgentChatPrompt`
+
+#### Files Changed
+- **New**: `src/skills/desktop-automation.ts` — full pywinauto skill
+- **Updated**: `src/core/relay.ts` — protected tab helpers + resolveTabId
+- **Updated**: `src/core/brain.ts` — desktop_automation in system prompt, relay rules
+- **Updated**: `src/core/skill-lock.ts` — desktop exclusive lock
+- **Updated**: `src/skills/index.ts` — skill registration
+- **Updated**: `src/core/org-agent-runner.ts` — tool filter + system prompt text
+- **Updated**: `docs/ARCHITECTURE.md` — skill count, relay tab protection docs, new skill section, lock table, org filtering, security model
+
+---
+
 ## [12.8.0] - 2026-03-22
 
 ### Android Mobile App (PersonalClawApp)

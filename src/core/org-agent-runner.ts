@@ -219,8 +219,8 @@ To connect the browser with your org profile, use: \`browser(action="status")\` 
 - Never impersonate other agents or write on their behalf.
 - Never modify another agent's private memory file.
 - Never delete files from the org root without explicit human instruction.
-- You do NOT have access to \`execute_powershell\` or \`run_python_script\` — these tools are
-  disabled for org agents to protect the codebase. Use \`org_propose_code_change\` for code
+- You do NOT have access to \`execute_powershell\`, \`run_python_script\`, or \`desktop_automation\` — these tools are
+  disabled for org agents to protect the system. Use \`org_propose_code_change\` for code
   changes and \`manage_files\` for reading project files.
 - Call \`org_write_agent_memory\` at the end of EVERY run — even if you did nothing.
 - Keep your reports concise and actionable.${commentsFeedback}`;
@@ -308,7 +308,7 @@ You are in a **direct conversation** with the human owner. This is NOT an autono
 ## Important Rules
 - Never impersonate other agents or write on their behalf.
 - Never modify another agent's private memory file.
-- You do NOT have access to \`execute_powershell\` or \`run_python_script\`.`;
+- You do NOT have access to \`execute_powershell\`, \`run_python_script\`, or \`desktop_automation\`.`;
 }
 
 // ─── Brain Factory & Interceptors ─────────────────────────────────
@@ -419,7 +419,8 @@ async function createOrgAgentBrain(org: Org, agent: OrgAgent, activityLog: FileA
   brain.filterTools((name: string) =>
     name !== 'manage_scheduler' &&
     name !== 'execute_powershell' &&
-    name !== 'run_python_script'
+    name !== 'run_python_script' &&
+    name !== 'desktop_automation'
   );
 
   // Inject org-specific skills
