@@ -2,6 +2,16 @@
 
 All notable changes to the PersonalClaw agent will be documented in this file.
 
+## [12.9.1] - 2026-03-23
+
+### Dashboard: Message Copy Button
+
+- **New: `MessageCopyButton` component** — elegant "Copy" button for LLM and agent responses.
+- **Auto-Copy functionality** — one-click copy to clipboard with visual "copied" feedback (Check icon).
+- **Hover-to-reveal UX** — buttons stay hidden to keep the UI clean, appearing only when hovering over a message.
+- **Smart Padding** — automated right-padding on assistant messages to ensure text never overlaps with the copy button.
+- **Multi-Chat Support** — enabled in both the primary conversation workspace and the individual agent direct chat panes.
+
 ## [12.9.0] - 2026-03-23
 
 ### Relay Tab Protection + Desktop Automation Skill

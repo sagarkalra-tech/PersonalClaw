@@ -24,7 +24,7 @@ PersonalClaw is a **local-first AI automation platform** for Windows. It connect
 - Mobile: React Native / Expo SDK 55 (Android)
 - Browser Control: Playwright + Chrome Extension Relay + Native Chrome CDP
 - Remote Access: Cloudflare Tunnel (`https://api.utilization-tracker.online`)
-- Version: 12.8.0
+- Version: 12.9.1
 - Author: Scout Kalra
 
 ---
@@ -129,6 +129,7 @@ PersonalClaw/
 │       ├── components/
 │       │   ├── ChatWorkspace.tsx    # Multi-pane resizable chat layout
 │       │   ├── ConversationPane.tsx # Single chat with markdown, workers, screenshots
+│       │   ├── MessageCopyButton.tsx # Copy-to-clipboard button for AI messages
 │       │   ├── AgentCard.tsx        # Org agent card + EditAgentModal
 │       │   ├── AgentChatPane.tsx    # Direct agent messaging (minimize/close)
 │       │   ├── OrgWorkspace.tsx     # 8-tab org management container

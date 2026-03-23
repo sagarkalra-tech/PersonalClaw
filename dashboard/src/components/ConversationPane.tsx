@@ -6,6 +6,7 @@ import type { Message, WorkerAgentInfo, WorkerLog } from '../types/conversation'
 import type { ToolFeedItem } from '../types/org';
 import { WorkerCard } from './WorkerCard';
 import { useScreenshot } from '../hooks/useScreenshot';
+import { MessageCopyButton } from './MessageCopyButton';
 
 interface ConversationPaneProps {
   conversationId: string;
@@ -89,6 +90,9 @@ export function ConversationPane(props: ConversationPaneProps) {
                 {msg.role === 'assistant' ? '🤖' : '👤'}
               </div>
               <div className="message-text">
+                {msg.role === 'assistant' && (
+                  <MessageCopyButton text={msg.text} />
+                )}
                 {msg.image && (
                   <img src={msg.image} alt="Screenshot" className="message-image" />
                 )}

@@ -374,7 +374,7 @@ body {
 }
 
 /* ─── Markdown ─── */
-.message-text { position: relative; padding-right: 28px !important; }
+.message-text { position: relative; padding-right: 32px !important; }
 .message-text p { margin: 0 0 10px 0; }
 .message-text p:last-child { margin-bottom: 0; }
 .message-text ul, .message-text ol { margin-left: 18px; margin-bottom: 10px; }
@@ -434,20 +434,37 @@ body {
 }
 
 /* ─── Copy Button ─── */
-.copy-btn {
+.message-copy-btn {
   position: absolute;
-  top: 0;
-  right: 0;
-  background: transparent;
-  border: none;
+  top: 6px;
+  right: 6px;
+  background: white;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
   color: var(--text-dim);
   cursor: pointer;
   opacity: 0;
-  transition: var(--transition);
-  padding: 4px;
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-sm);
+  z-index: 10;
+  padding: 0;
 }
-.message.bot:hover .copy-btn { opacity: 1; }
-.copy-btn:hover { color: var(--accent-primary); }
+
+.message-text:hover .message-copy-btn {
+  opacity: 1;
+}
+
+.message-copy-btn:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  background: #f8fafc;
+  transform: scale(1.05);
+}
 
 /* ─── Tool Updates ─── */
 .tool-updates { margin-bottom: 8px; }
@@ -953,6 +970,7 @@ h1 {
   word-break: break-word;
   border: 1px solid var(--border-light);
   color: var(--text-main);
+  position: relative;
 }
 .conversation-pane .message-text p { margin: 0 0 8px 0; }
 .conversation-pane .message-text p:last-child { margin-bottom: 0; }
@@ -996,6 +1014,9 @@ h1 {
 }
 .conversation-pane .message-text a { color: var(--accent-primary); text-decoration: none; }
 .conversation-pane .message-text a:hover { text-decoration: underline; }
+.message-bubble.assistant .message-text {
+  padding-right: 32px !important;
+}
 .message-bubble.user .message-text {
   background: var(--accent-primary); color: white; border-color: transparent;
 }
@@ -1407,7 +1428,15 @@ h1 {
 .agent-chat-message { max-width: 85%; }
 .agent-chat-message.user { align-self: flex-end; }
 .agent-chat-message.assistant { align-self: flex-start; }
-.agent-chat-message .message-text { padding: 10px 14px; border-radius: 10px; font-size: 13px; line-height: 1.5; background: var(--bg-main); border: 1px solid var(--border-light); color: var(--text-main); }
+.agent-chat-message .message-text { 
+  padding: 10px 14px; border-radius: 10px; font-size: 13px; line-height: 1.5; 
+  background: var(--bg-main); border: 1px solid var(--border-light); 
+  color: var(--text-main);
+  position: relative;
+}
+.agent-chat-message.assistant .message-text {
+  padding-right: 32px !important;
+}
 .agent-chat-message.user .message-text { background: var(--accent-primary); color: white; border-color: transparent; }
 .agent-chat-message .message-time { font-size: 10px; color: var(--text-dim); margin-top: 4px; }
 .agent-chat-message.user .message-time { text-align: right; }

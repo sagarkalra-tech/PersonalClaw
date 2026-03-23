@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Camera, Loader2, X, Minus, Trash2 } from 'lucide-react';
+import { Camera, Loader2, X, Minus } from 'lucide-react';
 import type { AgentChatMessage } from '../types/org';
 import { useScreenshot } from '../hooks/useScreenshot';
+import { MessageCopyButton } from './MessageCopyButton';
 
 interface AgentChatPaneProps {
   chatId: string;
@@ -68,6 +69,9 @@ export function AgentChatPane({ chatId, agentName, agentRole, messages, isWaitin
         {messages.map(msg => (
           <div key={msg.id} className={`agent-chat-message ${msg.role}`}>
             <div className="message-text">
+              {msg.role === 'assistant' && (
+                <MessageCopyButton text={msg.text} />
+              )}
               {msg.image && (
                 <img src={msg.image} alt="Screenshot" className="message-image" />
               )}

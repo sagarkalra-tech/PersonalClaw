@@ -6,7 +6,7 @@ For the full technical deep-dive (every interface, every event, every endpoint),
 
 ---
 
-## Project Structure (v12.9.0)
+## Project Structure (12.9.1)
 
 ```
 PersonalClaw/
