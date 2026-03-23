@@ -25,7 +25,7 @@ echo.
 where python >nul 2>nul
 if %errorlevel% neq 0 (
     echo [WARNING] Python is not installed!
-    echo Some skills (desktop automation, twitter posting, python scripts) require Python.
+    echo Some skills ^(desktop automation, twitter posting, python scripts^) require Python.
     echo Download from: https://www.python.org/downloads/
     echo.
 ) else (
@@ -69,7 +69,7 @@ echo.
 :: ─── 4. Python Dependencies ─────────────────────────────────
 where python >nul 2>nul
 if %errorlevel% equ 0 (
-    set /p SETUP_PYTHON="Install Python packages (pywinauto, Pillow)? Required for desktop automation. (y/n) [y]: "
+    set /p SETUP_PYTHON="Install Python packages ^(pywinauto, Pillow^)? Required for desktop automation. ^(y/n^) [y]: "
     if "!SETUP_PYTHON!"=="" set SETUP_PYTHON=y
     if /i "!SETUP_PYTHON!"=="y" (
         echo [4/7] Installing Python dependencies...
@@ -122,7 +122,7 @@ if /i "%SETUP_TG%"=="y" (
     set /p TG_TOKEN="Telegram Bot Token: "
     if not "!TG_TOKEN!"=="" (
         powershell -Command "(gc .env) -replace 'TELEGRAM_BOT_TOKEN=.*', 'TELEGRAM_BOT_TOKEN=!TG_TOKEN!' | Out-File -encoding ASCII .env"
-        set /p TG_ID="Your Telegram Chat ID (optional, locks bot to you): "
+        set /p TG_ID="Your Telegram Chat ID ^(optional, locks bot to you^): "
         if not "!TG_ID!"=="" (
             powershell -Command "(gc .env) -replace 'AUTHORIZED_CHAT_ID=.*', 'AUTHORIZED_CHAT_ID=!TG_ID!' | Out-File -encoding ASCII .env"
         )

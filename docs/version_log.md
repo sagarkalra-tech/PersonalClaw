@@ -2,6 +2,14 @@
 
 All notable changes to the PersonalClaw agent will be documented in this file.
 
+## [12.9.2] - 2026-03-23
+
+### CLI: Setup Script Fixes
+
+- **Fixed: `setup.bat` syntax error** — resolved "require was unexpected at this time" error caused by unescaped parentheses in `if` blocks.
+- **Improved Script Robustness** — escaped all nested parentheses in `echo` and `set /p` commands within conditional blocks to prevent premature script termination.
+- **Enhanced Messaging** — standardized warning and error prefixes for tool detection (Python/Node).
+
 ## [12.9.1] - 2026-03-23
 
 ### Dashboard: Message Copy Button
